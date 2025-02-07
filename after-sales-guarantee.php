@@ -105,7 +105,6 @@ function asg_create_tables() {
 
 // افزودن منو به پیشخوان وردپرس
 add_action('admin_menu', 'asg_admin_menu');
-// افزودن منو به پیشخوان وردپرس
 function asg_admin_menu() {
     // افزودن منوی اصلی
     add_menu_page(
@@ -154,7 +153,7 @@ function asg_admin_menu() {
         'گزارشات',
         'گزارشات',
         'manage_options',
-        'warranty-management-reports', // تغییر اسلاگ
+        'warranty-management-reports',
         'asg_reports_main_page'
     );
 
@@ -164,7 +163,7 @@ function asg_admin_menu() {
         'نمودارها',
         'نمودارها',
         'manage_options',
-        'warranty-management-charts', // تغییر اسلاگ
+        'warranty-management-charts',
         'asg_charts_page'
     );
 
@@ -184,7 +183,7 @@ function asg_admin_menu() {
         'دیباگ',
         'دیباگ',
         'manage_options',
-        'warranty-management-debug', // تغییر اسلاگ
+        'warranty-management-debug',
         'asg_debug_page'
     );
 
@@ -306,7 +305,7 @@ function asg_debug_page() {
         echo $status_icon . ' ';
         if ($table_exists) {
             $count = $wpdb->get_var("SELECT COUNT(*) FROM $table");
-            echo "$count رکورد";
+            echo "$count رکرد";
         } else {
             echo "جدول وجود ندارد!";
         }
@@ -403,9 +402,10 @@ function asg_debug_page() {
     echo '</table>';
     echo '</div>';
 
-    echo '</div>'; // پایان wrap
+    echo '</div>';
 }
 
+// ادامه کدها و توابع دیگر...
 // صفحه مدیریت درخواست‌ها
 function asg_admin_page() {
     global $wpdb;
