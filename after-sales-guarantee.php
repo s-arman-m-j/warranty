@@ -361,7 +361,7 @@ function asg_debug_page() {
     $plugin_dir = plugin_dir_path(dirname(__FILE__));
     $files_to_check = array(
         'includes/class-asg-notifications.php' => 'فایل نوتیفیکیشن‌ها',
-        'includes/class-asg-database.php' => 'فایل دیتابیس',
+        'includes/class-asg-db.php' => 'فایل دیتابیس',
         // فایل‌های دیگر را اینجا اضافه کنید
     );
 
@@ -2148,5 +2148,22 @@ function asg_help_page_callback() {
     echo '<p>در این بخش می‌توانید راهنمایی‌های مربوط به استفاده از سیستم را مشاهده کنید.</p>';
     // محتوای راهنما را اینجا اضافه کنید
     echo '</div>';
+}
+add_action( 'init', 'check_and_create_tables' );
+function check_and_create_tables() {
+    if ( ! function_exists( 'dbDelta' ) ) {
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+    }
+
+    if ( class_exists( 'ASG_DB' ) ) {
+        $asg_db = new ASG_DB();
+        if ( method_exists( $asg_db, 'create_tables' ) ) {
+            $asg_db->create_tables();
+        }
+    }
+
+    if ( class_exists( 'ASG_Notifications' ) && method_exists( 'ASG_Notifications', 'create_table' ) ) {
+        ASG_Notifications::create_table();
+    }
 }
 ?>
