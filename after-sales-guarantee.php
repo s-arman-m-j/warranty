@@ -51,6 +51,7 @@ function asg_init() {
 }
 add_action('plugins_loaded', 'asg_init');
 
+
 // فعال‌سازی افزونه و ایجاد جدول‌های دیتابیس
 register_activation_hook(__FILE__, 'asg_create_tables');
 function asg_create_tables() {
@@ -2149,4 +2150,8 @@ function asg_help_page_callback() {
     // محتوای راهنما را اینجا اضافه کنید
     echo '</div>';
 }
+register_activation_hook(__FILE__, function() {
+    $db = new ASG_DB();
+    $db->create_tables();
+});
 ?>
