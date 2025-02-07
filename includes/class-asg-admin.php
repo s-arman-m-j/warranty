@@ -9,7 +9,7 @@ class ASG_Admin {
     private $current_user;
 
     public function __construct() {
-        $this->db = asg_db(); // استفاده از الگوی Singleton برای استفاده یکنواخت از ASG_DB
+        $this->db = new ASG_DB();
         $this->security = new ASG_Security();
         $this->current_user = wp_get_current_user();
         
@@ -195,12 +195,3 @@ class ASG_Admin {
             wp_redirect(add_query_arg('message', 'updated', wp_get_referer()));
             exit;
         }
-    }
-
-    private function handle_export_report() {
-        // کد مربوط به صدور گزارش
-    }
-
-    // سایر متدها (render_admin_page, render_add_guarantee_page, و ...) در این فایل قرار دارند.
-}
-?>

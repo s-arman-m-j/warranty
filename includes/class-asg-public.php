@@ -8,7 +8,7 @@ class ASG_Public {
     private $security;
 
     public function __construct() {
-        $this->db = asg_db(); // استفاده از الگوی Singleton برای استفاده یکنواخت از ASG_DB
+        $this->db = new ASG_DB();
         $this->security = new ASG_Security();
 
         // تغییر اولویت اضافه کردن endpoint ها به بعد از Digits
@@ -222,4 +222,3 @@ class ASG_Public {
         return isset($statuses[$status]) ? $statuses[$status] : $status;
     }
 }
-?>

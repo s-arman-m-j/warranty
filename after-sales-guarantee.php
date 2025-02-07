@@ -39,12 +39,12 @@ require_once ASG_PLUGIN_DIR . 'includes/class-asg-security.php';
 require_once ASG_PLUGIN_DIR . 'includes/class-asg-notifications.php';
 require_once ASG_PLUGIN_DIR . 'includes/class-asg-api.php';
 require_once ASG_PLUGIN_DIR . 'includes/class-asg-reports.php';
-require_once ASG_PLUGIN_DIR . 'includes/class-asg-db.php';
+require_once ASG_PLUGIN_DIR . 'includes/class-asg-notifications.php';
 
 // راه‌اندازی افزونه
 function asg_init() {
     $security = new ASG_Security();
-    $db = new ASG_DB();
+    // ASG_Public() را فعلاً حذف می‌کنیم
     ASG_Notifications::instance();
     ASG_API::instance();
     ASG_Reports::instance();
@@ -105,6 +105,7 @@ function asg_create_tables() {
 
 // افزودن منو به پیشخوان وردپرس
 add_action('admin_menu', 'asg_admin_menu');
+// افزودن منو به پیشخوان وردپرس
 function asg_admin_menu() {
     // افزودن منوی اصلی
     add_menu_page(
@@ -153,7 +154,7 @@ function asg_admin_menu() {
         'گزارشات',
         'گزارشات',
         'manage_options',
-        'warranty-management-reports',
+        'warranty-management-reports', // تغییر اسلاگ
         'asg_reports_main_page'
     );
 
@@ -163,7 +164,7 @@ function asg_admin_menu() {
         'نمودارها',
         'نمودارها',
         'manage_options',
-        'warranty-management-charts',
+        'warranty-management-charts', // تغییر اسلاگ
         'asg_charts_page'
     );
 
@@ -183,7 +184,7 @@ function asg_admin_menu() {
         'دیباگ',
         'دیباگ',
         'manage_options',
-        'warranty-management-debug',
+        'warranty-management-debug', // تغییر اسلاگ
         'asg_debug_page'
     );
 
@@ -305,7 +306,7 @@ function asg_debug_page() {
         echo $status_icon . ' ';
         if ($table_exists) {
             $count = $wpdb->get_var("SELECT COUNT(*) FROM $table");
-            echo "$count رکرد";
+            echo "$count رکورد";
         } else {
             echo "جدول وجود ندارد!";
         }
@@ -360,7 +361,7 @@ function asg_debug_page() {
     $plugin_dir = plugin_dir_path(dirname(__FILE__));
     $files_to_check = array(
         'includes/class-asg-notifications.php' => 'فایل نوتیفیکیشن‌ها',
-        'includes/class-asg-db.php' => 'فایل دیتابیس',
+        'includes/class-asg-database.php' => 'فایل دیتابیس',
         // فایل‌های دیگر را اینجا اضافه کنید
     );
 
@@ -402,10 +403,9 @@ function asg_debug_page() {
     echo '</table>';
     echo '</div>';
 
-    echo '</div>';
+    echo '</div>'; // پایان wrap
 }
 
-// ادامه کدها و توابع دیگر...
 // صفحه مدیریت درخواست‌ها
 function asg_admin_page() {
     global $wpdb;
@@ -2148,16 +2148,5 @@ function asg_help_page_callback() {
     echo '<p>در این بخش می‌توانید راهنمایی‌های مربوط به استفاده از سیستم را مشاهده کنید.</p>';
     // محتوای راهنما را اینجا اضافه کنید
     echo '</div>';
-}
-function asg_db() {
-    static $db = null;
-    if ($db === null) {
-        $db = new ASG_DB();
-    }
-    return $db;
-}
-function asg_create_tables() {
-    $db = asg_db();
-    $db->create_tables();
 }
 ?>
