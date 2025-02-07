@@ -282,12 +282,6 @@ class ASG_DB {
      */
     public function get_notes($request_id) {
         $cache_key = 'guarantee_notes_' . $request_id;
-        $notes = $this->cache
-        /**
-     * دریافت یادداشت‌های یک درخواست
-     */
-    public function get_notes($request_id) {
-        $cache_key = 'guarantee_notes_' . $request_id;
         $notes = $this->cache->get($cache_key);
 
         if ($notes === false) {
