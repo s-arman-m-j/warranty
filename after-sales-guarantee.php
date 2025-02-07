@@ -361,7 +361,7 @@ function asg_debug_page() {
     $plugin_dir = plugin_dir_path(dirname(__FILE__));
     $files_to_check = array(
         'includes/class-asg-notifications.php' => 'فایل نوتیفیکیشن‌ها',
-        'includes/cclass-asg-db.php' => 'فایل دیتابیس',
+        'includes/class-asg-db.php' => 'فایل دیتابیس',
         // فایل‌های دیگر را اینجا اضافه کنید
     );
 
