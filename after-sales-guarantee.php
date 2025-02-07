@@ -33,13 +33,15 @@ spl_autoload_register(function ($class) {
         require $file;
     }
 });
+var_dump(class_exists('ASG_Notifications'));
+var_dump(class_exists('ASG_DB'));
 
 // فراخوانی فایل‌های اصلی
 require_once ASG_PLUGIN_DIR . 'includes/class-asg-security.php';
 require_once ASG_PLUGIN_DIR . 'includes/class-asg-notifications.php';
 require_once ASG_PLUGIN_DIR . 'includes/class-asg-api.php';
 require_once ASG_PLUGIN_DIR . 'includes/class-asg-reports.php';
-require_once ASG_PLUGIN_DIR . 'includes/class-asg-notifications.php';
+require_once ASG_PLUGIN_DIR . 'includes/class-asg-db.php';
 
 // راه‌اندازی افزونه
 function asg_init() {
@@ -2149,6 +2151,7 @@ function asg_help_page_callback() {
     // محتوای راهنما را اینجا اضافه کنید
     echo '</div>';
 }
+
 add_action( 'init', 'check_and_create_tables' );
 function check_and_create_tables() {
     if ( ! function_exists( 'dbDelta' ) ) {
