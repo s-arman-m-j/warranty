@@ -204,7 +204,7 @@ function asg_admin_menu() {
 function asg_debug_page() {
     global $wpdb;
     
-    // اضافه کردن استایل‌های CSS
+    // استایل‌های CSS
     echo '<style>
         .asg-debug-section {
             background: #fff;
@@ -231,13 +231,31 @@ function asg_debug_page() {
         .refresh-debug {
             float: right;
         }
+        .file-path {
+            font-family: monospace;
+            background: #f0f0f1;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
     </style>';
 
     echo '<div class="wrap">';
     echo '<h1>صفحه دیباگ گارانتی</h1>';
     
+    // دکمه بروزرسانی
     echo '<div class="debug-actions">';
     echo '<button class="button button-primary refresh-debug" onclick="window.location.reload();">بروزرسانی اطلاعات</button>';
+    echo '</div>';
+
+    // بخش اطلاعات مسیر فایل‌ها
+    echo '<div class="asg-debug-section">';
+    echo '<h2>اطلاعات مسیر فایل‌ها</h2>';
+    echo '<table class="wp-list-table widefat fixed striped">';
+    echo '<tr><td>ASG_PLUGIN_DIR:</td><td><span class="file-path">' . ASG_PLUGIN_DIR . '</span></td></tr>';
+    echo '<tr><td>مسیر کامل فایل دیتابیس:</td><td><span class="file-path">' . ASG_PLUGIN_DIR . 'includes/class-asg-db.php' . '</span></td></tr>';
+    echo '<tr><td>آیا فایل وجود دارد:</td><td>' . (file_exists(ASG_PLUGIN_DIR . 'includes/class-asg-db.php') ? '✅ بله' : '❌ خیر') . '</td></tr>';
+    echo '<tr><td>مجوزهای دسترسی:</td><td>' . (is_readable(ASG_PLUGIN_DIR . 'includes/class-asg-db.php') ? '✅ قابل خواندن' : '❌ غیر قابل خواندن') . '</td></tr>';
+    echo '</table>';
     echo '</div>';
 
     // بخش اطلاعات سیستم
@@ -245,7 +263,6 @@ function asg_debug_page() {
     echo '<h2>اطلاعات سیستم</h2>';
     echo '<table class="wp-list-table widefat fixed striped">';
     
-    // اطلاعات سیستم پایه
     $system_info = array(
         'نسخه PHP' => array(
             'value' => phpversion(),
@@ -296,7 +313,8 @@ function asg_debug_page() {
     
     $tables = array(
         $wpdb->prefix . 'asg_guarantee_requests' => 'درخواست‌های گارانتی',
-        $wpdb->prefix . 'asg_guarantee_notes' => 'یادداشت‌های گارانتی'
+        $wpdb->prefix . 'asg_guarantee_notes' => 'یادداشت‌های گارانتی',
+        $wpdb->prefix . 'asg_notifications' => 'نوتیفیکیشن‌ها'
     );
 
     foreach ($tables as $table => $label) {
@@ -308,6 +326,7 @@ function asg_debug_page() {
         if ($table_exists) {
             $count = $wpdb->get_var("SELECT COUNT(*) FROM $table");
             echo "$count رکورد";
+            echo " <span class='description'>(نام جدول: $table)</span>";
         } else {
             echo "جدول وجود ندارد!";
         }
@@ -325,11 +344,11 @@ function asg_debug_page() {
     $settings = array(
         'asg_statuses' => array(
             'label' => 'وضعیت‌های تعریف شده',
-            'default' => array()
+            'default' => array('آماده ارسال', 'ارسال شده', 'تعویض شده', 'خارج از گارانتی')
         ),
         'asg_version' => array(
             'label' => 'نسخه نصب شده',
-            'default' => ''
+            'default' => ASG_VERSION
         ),
         'asg_notification_enabled' => array(
             'label' => 'وضعیت نوتیفیکیشن‌ها',
@@ -354,50 +373,64 @@ function asg_debug_page() {
     echo '</table>';
     echo '</div>';
 
-    // بخش بررسی فایل‌ها
+    // بخش بررسی فایل‌های اصلی
     echo '<div class="asg-debug-section">';
     echo '<h2>بررسی فایل‌های اصلی</h2>';
     echo '<table class="wp-list-table widefat fixed striped">';
     
-    $plugin_dir = plugin_dir_path(dirname(__FILE__));
     $files_to_check = array(
         'includes/class-asg-notifications.php' => 'فایل نوتیفیکیشن‌ها',
         'includes/class-asg-db.php' => 'فایل دیتابیس',
-        // فایل‌های دیگر را اینجا اضافه کنید
+        'includes/class-asg-api.php' => 'فایل API',
+        'includes/class-asg-reports.php' => 'فایل گزارشات',
+        'includes/class-asg-security.php' => 'فایل امنیت'
     );
 
     foreach ($files_to_check as $file => $label) {
-        $file_exists = file_exists($plugin_dir . $file);
+        $full_path = ASG_PLUGIN_DIR . $file;
+        $file_exists = file_exists($full_path);
         $status_icon = $file_exists ? '✅' : '❌';
         
         echo "<tr><td>$label:</td><td>";
         echo $status_icon . ' ';
-        echo $file_exists ? 'موجود است' : 'یافت نشد!';
+        if ($file_exists) {
+            echo 'موجود است';
+            echo " <span class='description file-path'>($full_path)</span>";
+        } else {
+            echo 'یافت نشد!';
+            echo " <span class='description file-path'>($full_path)</span>";
+        }
         echo "</td></tr>";
     }
     
     echo '</table>';
     echo '</div>';
 
-    // بخش بررسی دسترسی‌ها و مجوزها
+    // بخش بررسی دسترسی‌ها
     echo '<div class="asg-debug-section">';
     echo '<h2>بررسی دسترسی‌ها</h2>';
     echo '<table class="wp-list-table widefat fixed striped">';
     
-    // بررسی دسترسی‌های پوشه‌ها
     $upload_dir = wp_upload_dir();
     $directories = array(
         $upload_dir['basedir'] => 'پوشه آپلود',
-        plugin_dir_path(dirname(__FILE__)) => 'پوشه افزونه'
+        ASG_PLUGIN_DIR => 'پوشه افزونه',
+        ASG_PLUGIN_DIR . 'includes' => 'پوشه includes'
     );
 
     foreach ($directories as $dir => $label) {
         $is_writable = wp_is_writable($dir);
-        $status_icon = $is_writable ? '✅' : '❌';
+        $exists = file_exists($dir);
+        $status_icon = $exists ? ($is_writable ? '✅' : '⚠️') : '❌';
         
         echo "<tr><td>$label:</td><td>";
         echo $status_icon . ' ';
-        echo $is_writable ? 'قابل نوشتن' : 'غیر قابل نوشتن';
+        if (!$exists) {
+            echo 'پوشه وجود ندارد!';
+        } else {
+            echo $is_writable ? 'قابل نوشتن' : 'غیر قابل نوشتن';
+        }
+        echo " <span class='description file-path'>($dir)</span>";
         echo "</td></tr>";
     }
     
