@@ -204,286 +204,299 @@ add_submenu_page(
 function asg_debug_page() {
     global $wpdb;
 
-    // بررسی دسترسی به عملکردهای مورد نیاز
-    if (!function_exists('sys_getloadavg')) {
-        echo '<div class="asg-debug-section">';
-        echo '<h2>استفاده از منابع سیستم</ه2>';
-        echo '<p class="asg-status-error">برخی از عملکردهای مورد نیاز برای بررسی منابع سیستم در دسترس نیستند: sys_getloadavg.</p>';
+    try {
+        // بررسی دسترسی به عملکردهای مورد نیاز
+        if (!function_exists('sys_getloadavg')) {
+            throw new Exception('برخی از عملکردهای مورد نیاز برای بررسی منابع سیستم در دسترس نیستند: sys_getloadavg.');
+        }
+
+        // استایل‌های CSS
+        echo '<style>
+            .asg-debug-section {
+                background: #fff;
+                padding: 20px;
+                margin: 20px 0;
+                border: 1px solid #ccd0d4;
+                box-shadow: 0 1px 1px rgba(0,0,0,.04);
+            }
+            .asg-status-ok {
+                color: #46b450;
+                font-weight: bold;
+            }
+            .asg-status-error {
+                color: #dc3232;
+                font-weight: bold;
+            }
+            .asg-status-warning {
+                color: #ffb900;
+                font-weight: bold;
+            }
+            .debug-actions {
+                margin: 20px 0;
+            }
+            .refresh-debug {
+                float: right;
+            }
+            .file-path {
+                font-family: monospace;
+                background: #f0f0f1;
+                padding: 2px 5px;
+                border-radius: 3px;
+            }
+        </style>';
+
+        echo '<div class="wrap">';
+        echo '<h1>صفحه دیباگ گارانتی</h1>';
+        
+        // دکمه بروزرسانی
+        echo '<div class="debug-actions">';
+        echo '<button class="button button-primary refresh-debug" onclick="window.location.reload();">بروزرسانی اطلاعات</button>';
         echo '</div>';
-        return;
-    }
 
-    // استایل‌های CSS
-    echo '<style>
-        .asg-debug-section {
-            background: #fff;
-            padding: 20px;
-            margin: 20px 0;
-            border: 1px solid #ccd0d4;
-            box-shadow: 0 1px 1px rgba(0,0,0,.04);
-        }
-        .asg-status-ok {
-            color: #46b450;
-            font-weight: bold;
-        }
-        .asg-status-error {
-            color: #dc3232;
-            font-weight: bold;
-        }
-        .asg-status-warning {
-            color: #ffb900;
-            font-weight: bold;
-        }
-        .debug-actions {
-            margin: 20px 0;
-        }
-        .refresh-debug {
-            float: right;
-        }
-        .file-path {
-            font-family: monospace;
-            background: #f0f0f1;
-            padding: 2px 5px;
-            border-radius: 3px;
-        }
-    </style>';
+        // بخش اطلاعات مسیر فایل‌ها
+        echo '<div class="asg-debug-section">';
+        echo '<h2>اطلاعات مسیر فایل‌ها</h2>';
+        echo '<table class="wp-list-table widefat fixed striped">';
+        echo '<tr><td>ASG_PLUGIN_DIR:</td><td><span class="file-path">' . ASG_PLUGIN_DIR . '</span></td></tr>';
+        echo '<tr><td>مسیر کامل فایل دیتابیس:</td><td><span class="file-path">' . ASG_PLUGIN_DIR . 'includes/class-asg-db.php' . '</span></td></tr>';
+        echo '<tr><td>آیا فایل وجود دارد:</td><td>' . (file_exists(ASG_PLUGIN_DIR . 'includes/class-asg-db.php') ? '✅ بله' : '❌ خیر') . '</td></tr>';
+        echo '<tr><td>مجوزهای دسترسی:</td><td>' . (is_readable(ASG_PLUGIN_DIR . 'includes/class-asg-db.php') ? '✅ قابل خواندن' : '❌ غیر قابل خواندن') . '</td></tr>';
+        echo '</table>';
+        echo '</div>';
 
-    echo '<div class="wrap">';
-    echo '<h1>صفحه دیباگ گارانتی</h1>';
-    
-    // دکمه بروزرسانی
-    echo '<div class="debug-actions">';
-    echo '<button class="button button-primary refresh-debug" onclick="window.location.reload();">بروزرسانی اطلاعات</button>';
-    echo '</div>';
-
-    // بخش اطلاعات مسیر فایل‌ها
-    echo '<div class="asg-debug-section">';
-    echo '<ه2>اطلاعات مسیر فایل‌ها</ه2>';
-    echo '<table class="wp-list-table widefat fixed striped">';
-    echo '<tr><td>ASG_PLUGIN_DIR:</td><td><span class="file-path">' . ASG_PLUGIN_DIR . '</span></td></tr>';
-    echo '<tr><td>مسیر کامل فایل دیتابیس:</td><td><span class="file-path">' . ASG_PLUGIN_DIR . 'includes/class-asg-db.php' . '</span></td></tr>';
-    echo '<tr><td>آیا فایل وجود دارد:</td><td>' . (file_exists(ASG_PLUGIN_DIR . 'includes/class-asg-db.php') ? '✅ بله' : '❌ خیر') . '</td></tr>';
-    echo '<tr><td>مجوزهای دسترسی:</td><td>' . (is_readable(ASG_PLUGIN_DIR . 'includes/class-asg-db.php') ? '✅ قابل خواندن' : '❌ غیر قابل خواندن') . '</td></tr>';
-    echo '</table>';
-    echo '</div>';
-
-    // بخش اطلاعات سیستم
-    echo '<div class="asg-debug-section">';
-    echo '<ه2>اطلاعات سیستم</ه2>';
-    echo '<table class="wp-list-table widefat fixed striped">';
-    
-    $system_info = array(
-        'نسخه PHP' => array(
-            'value' => phpversion(),
-            'status' => version_compare(phpversion(), '7.4', '>=') ? 'ok' : 'error',
-            'message' => version_compare(phpversion(), '7.4', '>=') ? '' : 'نسخه PHP باید 7.4 یا بالاتر باشد'
-        ),
-        'نسخه وردپرس' => array(
-            'value' => get_bloginfo('version'),
-            'status' => 'ok'
-        ),
-        'نسخه پلاگین' => array(
-            'value' => ASG_VERSION,
-            'status' => 'ok'
-        ),
-        'زمان سرور' => array(
-            'value' => current_time('mysql'),
-            'status' => 'ok'
-        ),
-        'محدودیت حافظه PHP' => array(
-            'value' => ini_get('memory_limit'),
-            'status' => (int)ini_get('memory_limit') >= 128 ? 'ok' : 'warning',
-            'message' => (int)ini_get('memory_limit') >= 128 ? '' : 'پیشنهاد می‌شود حداقل 128MB باشد'
-        ),
-        'حداکثر زمان اجرا' => array(
-            'value' => ini_get('max_execution_time') . ' ثانیه',
-            'status' => (int)ini_get('max_execution_time') >= 30 ? 'ok' : 'warning',
-            'message' => (int)ini_get('max_execution_time') >= 30 ? '' : 'پیشنهاد می‌شود حداقل 30 ثانیه باشد'
-        )
-    );
-
-    foreach ($system_info as $label => $info) {
-        $status_icon = $info['status'] === 'ok' ? '✅' : ($info['status'] === 'error' ? '❌' : '⚠️');
-        echo "<tr><td>$label:</td><td>";
-        echo $status_icon . ' ' . $info['value'];
-        if (!empty($info['message'])) {
-            echo " <span class='description'>(" . $info['message'] . ")</span>";
-        }
-        echo "</td></tr>";
-    }
-    
-    echo '</table>';
-    echo '</div>';
-
-    // بخش دیتابیس
-    echo '<div class="asg-debug-section">';
-    echo '<ه2>وضعیت دیتابیس</ه2>';
-    echo '<table class="wp-list-table widefat fixed striped">';
-    
-    $tables = array(
-        $wpdb->prefix . 'asg_guarantee_requests' => 'درخواست‌های گارانتی',
-        $wpdb->prefix . 'asg_guarantee_notes' => 'یادداشت‌های گارانتی',
-        $wpdb->prefix . 'asg_notifications' => 'نوتیفیکیشن‌ها'
-    );
-
-    foreach ($tables as $table => $label) {
-        $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$table'") == $table;
-        $status_icon = $table_exists ? '✅' : '❌';
+        // بخش اطلاعات سیستم
+        echo '<div class="asg-debug-section">';
+        echo '<h2>اطلاعات سیستم</h2>';
+        echo '<table class="wp-list-table widefat fixed striped">';
         
-        echo "<tr><td>$label:</td><td>";
-        echo $status_icon . ' ';
-        if ($table_exists) {
-            $count = $wpdb->get_var("SELECT COUNT(*) FROM $table");
-            echo "$count رکورد";
-            echo " <span class='description'>(نام جدول: $table)</span>";
-        } else {
-            echo "جدول وجود ندارد!";
+        $system_info = array(
+            'نسخه PHP' => array(
+                'value' => phpversion(),
+                'status' => version_compare(phpversion(), '7.4', '>=') ? 'ok' : 'error',
+                'message' => version_compare(phpversion(), '7.4', '>=') ? '' : 'نسخه PHP باید 7.4 یا بالاتر باشد'
+            ),
+            'نسخه وردپرس' => array(
+                'value' => get_bloginfo('version'),
+                'status' => 'ok'
+            ),
+            'نسخه پلاگین' => array(
+                'value' => ASG_VERSION,
+                'status' => 'ok'
+            ),
+            'زمان سرور' => array(
+                'value' => current_time('mysql'),
+                'status' => 'ok'
+            ),
+            'محدودیت حافظه PHP' => array(
+                'value' => ini_get('memory_limit'),
+                'status' => (int)ini_get('memory_limit') >= 128 ? 'ok' : 'warning',
+                'message' => (int)ini_get('memory_limit') >= 128 ? '' : 'پیشنهاد می‌شود حداقل 128MB باشد'
+            ),
+            'حداکثر زمان اجرا' => array(
+                'value' => ini_get('max_execution_time') . ' ثانیه',
+                'status' => (int)ini_get('max_execution_time') >= 30 ? 'ok' : 'warning',
+                'message' => (int)ini_get('max_execution_time') >= 30 ? '' : 'پیشنهاد می‌شود حداقل 30 ثانیه باشد'
+            )
+        );
+
+        foreach ($system_info as $label => $info) {
+            $status_icon = $info['status'] === 'ok' ? '✅' : ($info['status'] === 'error' ? '❌' : '⚠️');
+            echo "<tr><td>$label:</td><td>";
+            echo $status_icon . ' ' . $info['value'];
+            if (!empty($info['message'])) {
+                echo " <span class='description'>(" . $info['message'] . ")</span>";
+            }
+            echo "</td></tr>";
         }
-        echo "</td></tr>";
-    }
-    
-    echo '</table>';
-    echo '</div>';
-
-    // بخش تنظیمات
-    echo '<div class="asg-debug-section">';
-    echo '<ه2>تنظیمات پلاگین</ه2>';
-    echo '<table class="wp-list-table widefat fixed striped">';
-    
-    $settings = array(
-        'asg_statuses' => array(
-            'label' => 'وضعیت‌های تعریف شده',
-            'default' => array('آماده ارسال', 'ارسال شده', 'تعویض شده', 'خارج از گارانتی')
-        ),
-        'asg_version' => array(
-            'label' => 'نسخه نصب شده',
-            'default' => ASG_VERSION
-        ),
-        'asg_notification_enabled' => array(
-            'label' => 'وضعیت نوتیفیکیشن‌ها',
-            'default' => '0'
-        )
-    );
-
-    foreach ($settings as $option_name => $setting) {
-        $value = get_option($option_name, $setting['default']);
-        $status_icon = !empty($value) ? '✅' : '⚠️';
         
-        echo "<tr><td>{$setting['label']}:</td><td>";
-        echo $status_icon . ' ';
-        if (is_array($value)) {
-            echo implode(', ', array_map('esc_html', $value));
-        } else {
-            echo esc_html($value ?: 'تنظیم نشده');
-        }
-        echo "</td></tr>";
-    }
-    
-    echo '</table>';
-    echo '</div>';
+        echo '</table>';
+        echo '</div>';
 
-    // بخش بررسی فایل‌های اصلی
-    echo '<div class="asg-debug-section">';
-    echo '<ه2>بررسی فایل‌های اصلی</ه2>';
-    echo '<table class="wp-list-table widefat fixed striped">';
-    
-    $files_to_check = array(
-        'includes/class-asg-notifications.php' => 'فایل نوتیفیکیشن‌ها',
-        'includes/class-asg-db.php' => 'فایل دیتابیس',
-        'includes/class-asg-api.php' => 'فایل API',
-        'includes/class-asg-reports.php' => 'فایل گزارشات',
-        'includes/class-asg-security.php' => 'فایل امنیت'
-    );
-
-    foreach ($files_to_check as $file => $label) {
-        $full_path = ASG_PLUGIN_DIR . $file;
-        $file_exists = file_exists($full_path);
-        $status_icon = $file_exists ? '✅' : '❌';
+        // بخش دیتابیس
+        echo '<div class="asg-debug-section">';
+        echo '<h2>وضعیت دیتابیس</h2>';
+        echo '<table class="wp-list-table widefat fixed striped">';
         
-        echo "<tr><td>$label:</td><td>";
-        echo $status_icon . ' ';
-        if ($file_exists) {
-            echo 'موجود است';
-            echo " <span class='description file-path'>($full_path)</span>";
-        } else {
-            echo 'یافت نشد!';
-            echo " <span class='description file-path'>($full_path)</span>";
+        $tables = array(
+            $wpdb->prefix . 'asg_guarantee_requests' => 'درخواست‌های گارانتی',
+            $wpdb->prefix . 'asg_guarantee_notes' => 'یادداشت‌های گارانتی',
+            $wpdb->prefix . 'asg_notifications' => 'نوتیفیکیشن‌ها'
+        );
+
+        foreach ($tables as $table => $label) {
+            $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$table'") == $table;
+            $status_icon = $table_exists ? '✅' : '❌';
+            
+            echo "<tr><td>$label:</td><td>";
+            echo $status_icon . ' ';
+            if ($table_exists) {
+                $count = $wpdb->get_var("SELECT COUNT(*) FROM $table");
+                echo "$count رکورد";
+                echo " <span class='description'>(نام جدول: $table)</span>";
+            } else {
+                echo "جدول وجود ندارد!";
+            }
+            echo "</td></tr>";
         }
-        echo "</td></tr>";
-    }
-    
-    echo '</table>';
-    echo '</div>';
-
-    // بخش بررسی دسترسی‌ها
-    echo '<div class="asg-debug-section">';
-    echo '<ه2>بررسی دسترسی‌ها</ه2>';
-    echo '<table class="wp-list-table widefat fixed striped">';
-    
-    $upload_dir = wp_upload_dir();
-    $directories = array(
-        $upload_dir['basedir'] => 'پوشه آپلود',
-        ASG_PLUGIN_DIR => 'پوشه افزونه',
-        ASG_PLUGIN_DIR . 'includes' => 'پوشه includes'
-    );
-
-    foreach ($directories as $dir => $label) {
-        $is_writable = wp_is_writable($dir);
-        $exists = file_exists($dir);
-        $status_icon = $exists ? ($is_writable ? '✅' : '⚠️') : '❌';
         
-        echo "<tr><td>$label:</td><td>";
-        echo $status_icon . ' ';
-        if (!$exists) {
-            echo 'پوشه وجود ندارد!';
-        } else {
-            echo $is_writable ? 'قابل نوشتن' : 'غیر قابل نوشتن';
+        echo '</table>';
+        echo '</div>';
+
+        // بخش تنظیمات
+        echo '<div class="asg-debug-section">';
+        echo '<h2>تنظیمات پلاگین</h2>';
+        echo '<table class="wp-list-table widefat fixed striped">';
+        
+        $settings = array(
+            'asg_statuses' => array(
+                'label' => 'وضعیت‌های تعریف شده',
+                'default' => array('آماده ارسال', 'ارسال شده', 'تعویض شده', 'خارج از گارانتی')
+            ),
+            'asg_version' => array(
+                'label' => 'نسخه نصب شده',
+                'default' => ASG_VERSION
+            ),
+            'asg_notification_enabled' => array(
+                'label' => 'وضعیت نوتیفیکیشن‌ها',
+                'default' => '0'
+            )
+        );
+
+        foreach ($settings as $option_name => $setting) {
+            $value = get_option($option_name, $setting['default']);
+            $status_icon = !empty($value) ? '✅' : '⚠️';
+            
+            echo "<tr><td>{$setting['label']}:</td><td>";
+            echo $status_icon . ' ';
+            if (is_array($value)) {
+                echo implode(', ', array_map('esc_html', $value));
+            } else {
+                echo esc_html($value ?: 'تنظیم نشده');
+            }
+            echo "</td></tr>";
         }
-        echo " <span class='description file-path'>($dir)</span>";
-        echo "</td></tr>";
+        
+        echo '</table>';
+        echo '</div>';
+
+        // بخش بررسی فایل‌های اصلی
+        echo '<div class="asg-debug-section">';
+        echo '<h2>بررسی فایل‌های اصلی</h2>';
+        echo '<table class="wp-list-table widefat fixed striped">';
+        
+        $files_to_check = array(
+            'includes/class-asg-notifications.php' => 'فایل نوتیفیکیشن‌ها',
+            'includes/class-asg-db.php' => 'فایل دیتابیس',
+            'includes/class-asg-api.php' => 'فایل API',
+            'includes/class-asg-reports.php' => 'فایل گزارشات',
+            'includes/class-asg-security.php' => 'فایل امنیت'
+        );
+
+        foreach ($files_to_check as $file => $label) {
+            $full_path = ASG_PLUGIN_DIR . $file;
+            $file_exists = file_exists($full_path);
+            $status_icon = $file_exists ? '✅' : '❌';
+            
+            echo "<tr><td>$label:</td><td>";
+            echo $status_icon . ' ';
+            if ($file_exists) {
+                echo 'موجود است';
+                echo " <span class='description file-path'>($full_path)</span>";
+            } else {
+                echo 'یافت نشد!';
+                echo " <span class='description file-path'>($full_path)</span>";
+            }
+            echo "</td></tr>";
+        }
+        
+        echo '</table>';
+        echo '</div>';
+
+        // بخش بررسی دسترسی‌ها
+        echo '<div class="asg-debug-section">';
+        echo '<h2>بررسی دسترسی‌ها</h2>';
+        echo '<table class="wp-list-table widefat fixed striped">';
+        
+        $upload_dir = wp_upload_dir();
+        $directories = array(
+            $upload_dir['basedir'] => 'پوشه آپلود',
+            ASG_PLUGIN_DIR => 'پوشه افزونه',
+            ASG_PLUGIN_DIR . 'includes' => 'پوشه includes'
+        );
+
+        foreach ($directories as $dir => $label) {
+            $is_writable = wp_is_writable($dir);
+            $exists = file_exists($dir);
+            $status_icon = $exists ? ($is_writable ? '✅' : '⚠️') : '❌';
+            
+            echo "<tr><td>$label:</td><td>";
+            echo $status_icon . ' ';
+            if (!$exists) {
+                echo 'پوشه وجود ندارد!';
+            } else {
+                echo $is_writable ? 'قابل نوشتن' : 'غیر قابل نوشتن';
+            }
+            echo " <span class='description file-path'>($dir)</span>";
+            echo "</td></tr>";
+        }
+        
+        echo '</table>';
+        echo '</div>';
+
+        // بخش منابع سیستم
+        echo '<div class="asg-debug-section">';
+        echo '<h2>استفاده از منابع سیستم</h2>';
+        echo '<table class="wp-list-table widefat fixed striped">';
+
+        $memory_usage = round(memory_get_usage() / 1024 / 1024, 2) . ' MB';
+        $memory_peak_usage = round(memory_get_peak_usage() / 1024 / 1024, 2) . ' MB';
+
+        // محاسبه درصد استفاده از حافظه
+        $memory_limit = ini_get('memory_limit');
+        if (strpos($memory_limit, 'M') !== false) {
+            $memory_limit = intval($memory_limit) * 1024 * 1024;
+        } elseif (strpos($memory_limit, 'G') !== false) {
+            $memory_limit = intval($memory_limit) * 1024 * 1024 * 1024;
+        } else {
+            $memory_limit = intval($memory_limit);
+        }
+        $memory_usage_percent = round((memory_get_usage() / $memory_limit) * 100, 2) . '%';
+
+        // محاسبه تعداد هسته‌های CPU
+        $cpu_cores = 1;
+        if (is_readable('/proc/cpuinfo')) {
+            $cpuinfo = file_get_contents('/proc/cpuinfo');
+            preg_match_all('/^processor/m', $cpuinfo, $matches);
+            $cpu_cores = count($matches[0]);
+        } elseif (stripos(PHP_OS, 'win') === false) {
+            $cpu_cores = (int) trim(shell_exec("nproc"));
+        } else {
+            $cpu_cores = 1; // پیش‌فرض به 1 اگر تعداد هسته‌ها در دسترس نباشد
+        }
+
+        // محاسبه درصد استفاده از CPU
+        $cpu_load = sys_getloadavg();
+        $cpu_usage_percent_1m = round(($cpu_load[0] / $cpu_cores) * 100, 2) . '%';
+        $cpu_usage_percent_5m = round(($cpu_load[1] / $cpu_cores) * 100, 2) . '%';
+        $cpu_usage_percent_15m = round(($cpu_load[2] / $cpu_cores) * 100, 2) . '%';
+
+        echo '<tr><td>استفاده از حافظه فعلی:</td><td>' . $memory_usage . ' (' . $memory_usage_percent . ')</td></tr>';
+        echo '<tr><td>بیشترین استفاده از حافظه:</td><td>' . $memory_peak_usage . '</td></tr>';
+        echo '<tr><td>بار پردازنده (1 دقیقه):</td><td>' . $cpu_load[0] . ' (' . $cpu_usage_percent_1m . ')</td></tr>';
+        echo '<tr><td>بار پردازنده (5 دقیقه):</td><td>' . $cpu_load[1] . ' (' . $cpu_usage_percent_5m . ')</td></tr>';
+        echo '<tr><td>بار پردازنده (15 دقیقه):</td><td>' . $cpu_load[2] . ' (' . $cpu_usage_percent_15m . ')</td></tr>';
+
+        echo '</table>';
+        echo '</div>';
+
+        echo '</div>'; // پایان wrap
+
+    } catch (Exception $e) {
+        echo '<div class="asg-debug-section">';
+        echo '<h2>خطا</ه2>';
+        echo '<p class="asg-status-error">' . $e->getMessage() . '</p>';
+        echo '</div>';
     }
-    
-    echo '</table>';
-    echo '</div>';
-
-    // بخش منابع سیستم
-    echo '<div class="asg-debug-section">';
-    echo '<ه2>استفاده از منابع سیستم</ه2>';
-    echo '<table class="wp-list-table widefat fixed striped">';
-
-    $memory_usage = round(memory_get_usage() / 1024 / 1024, 2) . ' MB';
-    $memory_peak_usage = round(memory_get_peak_usage() / 1024 / 1024, 2) . ' MB';
-
-    // محاسبه درصد استفاده از حافظه
-    $memory_limit = ini_get('memory_limit');
-    if (strpos($memory_limit, 'M') !== false) {
-        $memory_limit = intval($memory_limit) * 1024 * 1024;
-    } elseif (strpos($memory_limit, 'G') !== false) {
-        $memory_limit = intval($memory_limit) * 1024 * 1024 * 1024;
-    } else {
-        $memory_limit = intval($memory_limit);
-    }
-    $memory_usage_percent = round((memory_get_usage() / $memory_limit) * 100, 2) . '%';
-
-    // محاسبه تعداد هسته‌های CPU
-    $cpu_cores = (int) @file_get_contents('/proc/cpuinfo') ? count(preg_grep('/^processor\s+:\s+\d+$/', file('/proc/cpuinfo'))) : 1;
-
-    // محاسبه درصد استفاده از CPU
-    $cpu_load = sys_getloadavg();
-    $cpu_usage_percent_1m = round(($cpu_load[0] / $cpu_cores) * 100, 2) . '%';
-    $cpu_usage_percent_5m = round(($cpu_load[1] / $cpu_cores) * 100, 2) . '%';
-    $cpu_usage_percent_15m = round(($cpu_load[2] / $cpu_cores) * 100, 2) . '%';
-
-    echo '<tr><td>استفاده از حافظه فعلی:</td><td>' . $memory_usage . ' (' . $memory_usage_percent . ')</td></tr>';
-    echo '<tr><td>بیشترین استفاده از حافظه:</td><td>' . $memory_peak_usage . '</td></tr>';
-    echo '<tr><td>بار پردازنده (1 دقیقه):</td><td>' . $cpu_load[0] . ' (' . $cpu_usage_percent_1m . ')</td></tr>';
-    echo '<tr><td>بار پردازنده (5 دقیقه):</td><td>' . $cpu_load[1] . ' (' . $cpu_usage_percent_5m . ')</td></tr>';
-    echo '<tr><td>بار پردازنده (15 دقیقه):</td><td>' . $cpu_load[2] . ' (' . $cpu_usage_percent_15m . ')</td></tr>';
-
-    echo '</table>';
-    echo '</div>';
-
-    echo '</div>'; // پایان wrap
 }
 
 // صفحه مدیریت درخواست‌ها
@@ -498,8 +511,6 @@ function asg_admin_page() {
     echo '</div>';
 }
 
-// صفحه ثبت گارانتی جدید
-// صفحه ثبت گارانتی جدید
 // صفحه ثبت گارانتی جدید
 function asg_add_guarantee_page() {
     global $wpdb;
