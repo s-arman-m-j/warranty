@@ -119,15 +119,14 @@ function asg_admin_menu() {
         6
     );
 
-    // افزودن زیرمنوی لیست درخواست‌ها (همان صفحه اصلی)
-    add_submenu_page(
-        'warranty-management',
-        'لیست درخواست‌ها',
-        'لیست درخواست‌ها',
-        'manage_options',
-        'warranty-management',
-        'asg_admin_page'
-    );
+    // افزودن زیرمنو برای دیباگ
+add_submenu_page(
+    'warranty-management',
+    'دیباگ',
+    'manage_options',
+    'warranty-management-debug', // تغییر اسلاگ
+    'asg_debug_page'
+);
 
     // افزودن زیرمنو برای ثبت گارانتی جدید
     add_submenu_page(
@@ -201,9 +200,19 @@ function asg_admin_menu() {
 }
 
 // صفحه دیباگ (اضافه شده)
+// تابع دیباگ
 function asg_debug_page() {
     global $wpdb;
-    
+
+    // بررسی دسترسی به عملکردهای مورد نیاز
+    if (!function_exists('sys_getloadavg')) {
+        echo '<div class="asg-debug-section">';
+        echo '<h2>استفاده از منابع سیستم</ه2>';
+        echo '<p class="asg-status-error">برخی از عملکردهای مورد نیاز برای بررسی منابع سیستم در دسترس نیستند: sys_getloadavg.</p>';
+        echo '</div>';
+        return;
+    }
+
     // استایل‌های CSS
     echo '<style>
         .asg-debug-section {
@@ -249,7 +258,7 @@ function asg_debug_page() {
 
     // بخش اطلاعات مسیر فایل‌ها
     echo '<div class="asg-debug-section">';
-    echo '<h2>اطلاعات مسیر فایل‌ها</h2>';
+    echo '<ه2>اطلاعات مسیر فایل‌ها</ه2>';
     echo '<table class="wp-list-table widefat fixed striped">';
     echo '<tr><td>ASG_PLUGIN_DIR:</td><td><span class="file-path">' . ASG_PLUGIN_DIR . '</span></td></tr>';
     echo '<tr><td>مسیر کامل فایل دیتابیس:</td><td><span class="file-path">' . ASG_PLUGIN_DIR . 'includes/class-asg-db.php' . '</span></td></tr>';
@@ -260,7 +269,7 @@ function asg_debug_page() {
 
     // بخش اطلاعات سیستم
     echo '<div class="asg-debug-section">';
-    echo '<h2>اطلاعات سیستم</h2>';
+    echo '<ه2>اطلاعات سیستم</ه2>';
     echo '<table class="wp-list-table widefat fixed striped">';
     
     $system_info = array(
@@ -308,7 +317,7 @@ function asg_debug_page() {
 
     // بخش دیتابیس
     echo '<div class="asg-debug-section">';
-    echo '<h2>وضعیت دیتابیس</h2>';
+    echo '<ه2>وضعیت دیتابیس</ه2>';
     echo '<table class="wp-list-table widefat fixed striped">';
     
     $tables = array(
@@ -338,7 +347,7 @@ function asg_debug_page() {
 
     // بخش تنظیمات
     echo '<div class="asg-debug-section">';
-    echo '<h2>تنظیمات پلاگین</h2>';
+    echo '<ه2>تنظیمات پلاگین</ه2>';
     echo '<table class="wp-list-table widefat fixed striped">';
     
     $settings = array(
@@ -375,7 +384,7 @@ function asg_debug_page() {
 
     // بخش بررسی فایل‌های اصلی
     echo '<div class="asg-debug-section">';
-    echo '<h2>بررسی فایل‌های اصلی</h2>';
+    echo '<ه2>بررسی فایل‌های اصلی</ه2>';
     echo '<table class="wp-list-table widefat fixed striped">';
     
     $files_to_check = array(
@@ -408,7 +417,7 @@ function asg_debug_page() {
 
     // بخش بررسی دسترسی‌ها
     echo '<div class="asg-debug-section">';
-    echo '<h2>بررسی دسترسی‌ها</h2>';
+    echo '<ه2>بررسی دسترسی‌ها</ه2>';
     echo '<table class="wp-list-table widefat fixed striped">';
     
     $upload_dir = wp_upload_dir();
@@ -434,6 +443,43 @@ function asg_debug_page() {
         echo "</td></tr>";
     }
     
+    echo '</table>';
+    echo '</div>';
+
+    // بخش منابع سیستم
+    echo '<div class="asg-debug-section">';
+    echo '<ه2>استفاده از منابع سیستم</ه2>';
+    echo '<table class="wp-list-table widefat fixed striped">';
+
+    $memory_usage = round(memory_get_usage() / 1024 / 1024, 2) . ' MB';
+    $memory_peak_usage = round(memory_get_peak_usage() / 1024 / 1024, 2) . ' MB';
+
+    // محاسبه درصد استفاده از حافظه
+    $memory_limit = ini_get('memory_limit');
+    if (strpos($memory_limit, 'M') !== false) {
+        $memory_limit = intval($memory_limit) * 1024 * 1024;
+    } elseif (strpos($memory_limit, 'G') !== false) {
+        $memory_limit = intval($memory_limit) * 1024 * 1024 * 1024;
+    } else {
+        $memory_limit = intval($memory_limit);
+    }
+    $memory_usage_percent = round((memory_get_usage() / $memory_limit) * 100, 2) . '%';
+
+    // محاسبه تعداد هسته‌های CPU
+    $cpu_cores = (int) @file_get_contents('/proc/cpuinfo') ? count(preg_grep('/^processor\s+:\s+\d+$/', file('/proc/cpuinfo'))) : 1;
+
+    // محاسبه درصد استفاده از CPU
+    $cpu_load = sys_getloadavg();
+    $cpu_usage_percent_1m = round(($cpu_load[0] / $cpu_cores) * 100, 2) . '%';
+    $cpu_usage_percent_5m = round(($cpu_load[1] / $cpu_cores) * 100, 2) . '%';
+    $cpu_usage_percent_15m = round(($cpu_load[2] / $cpu_cores) * 100, 2) . '%';
+
+    echo '<tr><td>استفاده از حافظه فعلی:</td><td>' . $memory_usage . ' (' . $memory_usage_percent . ')</td></tr>';
+    echo '<tr><td>بیشترین استفاده از حافظه:</td><td>' . $memory_peak_usage . '</td></tr>';
+    echo '<tr><td>بار پردازنده (1 دقیقه):</td><td>' . $cpu_load[0] . ' (' . $cpu_usage_percent_1m . ')</td></tr>';
+    echo '<tr><td>بار پردازنده (5 دقیقه):</td><td>' . $cpu_load[1] . ' (' . $cpu_usage_percent_5m . ')</td></tr>';
+    echo '<tr><td>بار پردازنده (15 دقیقه):</td><td>' . $cpu_load[2] . ' (' . $cpu_usage_percent_15m . ')</td></tr>';
+
     echo '</table>';
     echo '</div>';
 
