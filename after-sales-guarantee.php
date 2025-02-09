@@ -1890,60 +1890,6 @@ function asg_reports_main_page() {
     $date_from = isset($_GET['date_from']) ? sanitize_text_field($_GET['date_from']) : '';
     $date_to = isset($_GET['date_to']) ? sanitize_text_field($_GET['date_to']) : '';
 
-    // اضافه کردن استایل‌های پرینت
-    echo '<style>
-        @media print {
-            .asg-filter-row,
-            .asg-column-selector,
-            .asg-export-buttons,
-            #adminmenuwrap,
-            #adminmenuback,
-            #wpadminbar,
-            #wpfooter {
-                display: none !important;
-            }
-            
-            .wrap {
-                margin: 0 !important;
-                padding: 0 !important;
-            }
-            
-            .wp-list-table {
-                border-collapse: collapse;
-                width: 100%;
-            }
-            
-            .wp-list-table th,
-            .wp-list-table td {
-                border: 1px solid #000;
-                padding: 8px;
-            }
-            
-            .wp-list-table img {
-                max-width: 50px !important;
-                height: auto !important;
-            }
-            
-            .print-header {
-                display: block !important;
-                text-align: center;
-                margin-bottom: 20px;
-            }
-            
-            .print-footer {
-                display: block !important;
-                text-align: left;
-                margin-top: 20px;
-                font-size: 12px;
-            }
-        }
-        
-        .print-header,
-        .print-footer {
-            display: none;
-        }
-    </style>';
-
     // ستون های قابل انتخاب
     $available_columns = array(
         'id' => 'ID درخواست',
@@ -2032,7 +1978,65 @@ function asg_reports_main_page() {
 
     $where_sql = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
 
-    // ساخت کوئری نهایی
+    // اگر درخواست خروجی اکسل است
+    if (isset($_GET['export']) && $_GET['export'] === 'excel') {
+        // تنظیم هدرهای لازم برای دانلود فایل اکسل
+        header('Content-Type: application/vnd.ms-excel; charset=utf-8');
+        header('Content-Disposition: attachment;filename="warranty-report-' . date('Y-m-d') . '.xls"');
+        header('Cache-Control: max-age=0');
+        
+        // خروجی به صورت UTF-8 با BOM برای پشتیبانی از فارسی
+        echo chr(0xEF) . chr(0xBB) . chr(0xBF);
+
+        // ساخت کوئری
+        $sql = "
+            SELECT $select_sql
+            FROM {$wpdb->prefix}asg_guarantee_requests r
+            $join_sql
+            $where_sql
+            ORDER BY r.created_at DESC
+        ";
+
+        if (!empty($params)) {
+            $sql = $wpdb->prepare($sql, $params);
+        }
+
+        $results = $wpdb->get_results($sql);
+        
+        // ایجاد هدر جدول
+        echo "<table border='1'>";
+        echo "<tr>";
+        foreach ($selected_columns as $col) {
+            echo "<th>" . esc_html($available_columns[$col]) . "</th>";
+        }
+        echo "</tr>";
+        
+        // نمایش داده‌ها
+        foreach ($results as $row) {
+            echo "<tr>";
+            foreach ($selected_columns as $col) {
+                echo "<td>";
+                switch ($col) {
+                    case 'image':
+                        echo !empty($row->image_id) ? 'دارد' : 'ندارد';
+                        break;
+                    case 'notes_count':
+                        echo esc_html($row->notes_count);
+                        break;
+                    default:
+                        $value = isset($row->$col) ? $row->$col : '-';
+                        echo esc_html($value);
+                        break;
+                }
+                echo "</td>";
+            }
+            echo "</tr>";
+        }
+        echo "</table>";
+        exit;
+    }
+
+    // ساخت کوئری اصلی با محدودیت تعداد نتایج
     $sql = "
         SELECT $select_sql
         FROM {$wpdb->prefix}asg_guarantee_requests r
@@ -2042,12 +2046,10 @@ function asg_reports_main_page() {
         LIMIT 500
     ";
 
-    // اگر پارامتر وجود دارد، کوئری را prepare کنید
     if (!empty($params)) {
         $sql = $wpdb->prepare($sql, $params);
     }
 
-    // اجرای کوئری
     $results = $wpdb->get_results($sql);
 
     // شروع نمایش گزارشات
@@ -2067,7 +2069,9 @@ function asg_reports_main_page() {
     echo '<select name="filter_customer" id="filter_customer" class="asg-select2-customer">';
     if ($filter_customer) {
         $user = get_user_by('id', $filter_customer);
-        echo '<option value="' . $filter_customer . '" selected>' . esc_html($user->display_name) . '</option>';
+        if ($user) {
+            echo '<option value="' . esc_attr($filter_customer) . '" selected>' . esc_html($user->display_name) . '</option>';
+        }
     }
     echo '</select>';
     echo '</div>';
@@ -2078,7 +2082,9 @@ function asg_reports_main_page() {
     echo '<select name="filter_tamin" id="filter_tamin" class="asg-select2-tamin">';
     if ($filter_tamin) {
         $user = get_user_by('id', $filter_tamin);
-        echo '<option value="' . $filter_tamin . '" selected>' . esc_html($user->display_name) . '</option>';
+        if ($user) {
+            echo '<option value="' . esc_attr($filter_tamin) . '" selected>' . esc_html($user->display_name) . '</option>';
+        }
     }
     echo '</select>';
     echo '</div>';
@@ -2108,7 +2114,7 @@ function asg_reports_main_page() {
     if ($filter_product) {
         $product = wc_get_product($filter_product);
         if ($product) {
-            echo '<option value="' . $filter_product . '" selected>' . esc_html($product->get_name()) . '</option>';
+            echo '<option value="' . esc_attr($filter_product) . '" selected>' . esc_html($product->get_name()) . '</option>';
         }
     }
     echo '</select>';
@@ -2129,7 +2135,7 @@ function asg_reports_main_page() {
     foreach ($available_columns as $key => $label) {
         $checked = in_array($key, $selected_columns) ? 'checked' : '';
         echo '<label>';
-        echo '<input type="checkbox" name="columns[]" value="' . $key . '" ' . $checked . '>';
+        echo '<input type="checkbox" name="columns[]" value="' . esc_attr($key) . '" ' . $checked . '>';
         echo esc_html($label);
         echo '</label>';
     }
@@ -2138,7 +2144,7 @@ function asg_reports_main_page() {
     // دکمه‌های اکسل و پرینت
     echo '<div class="asg-export-buttons">';
     echo '<button type="submit" class="button button-primary">اعمال فیلترها</button>';
-    echo '<a href="' . admin_url('admin.php?page=warranty-management-reports&export=excel' . http_build_query($_GET)) . '" class="button button-secondary"><span class="dashicons dashicons-media-spreadsheet"></span> خروجی اکسل</a>';
+    echo '<a href="' . esc_url(add_query_arg('export', 'excel', $_SERVER['REQUEST_URI'])) . '" class="button button-secondary"><span class="dashicons dashicons-media-spreadsheet"></span> خروجی اکسل</a>';
     echo '<button type="button" class="button button-secondary print-preview"><span class="dashicons dashicons-printer"></span> پیش‌نمایش چاپ</button>';
     echo '<a href="' . admin_url('admin.php?page=warranty-management-reports') . '" class="button">پاکسازی فیلترها</a>';
     echo '</div>';
@@ -2154,11 +2160,15 @@ function asg_reports_main_page() {
         echo '<ul>';
         if ($filter_customer) {
             $user = get_user_by('id', $filter_customer);
-            echo '<li>مشتری: ' . esc_html($user->display_name) . '</li>';
+            if ($user) {
+                echo '<li>مشتری: ' . esc_html($user->display_name) . '</li>';
+            }
         }
         if ($filter_tamin) {
             $user = get_user_by('id', $filter_tamin);
-            echo '<li>تامین کننده: ' . esc_html($user->display_name) . '</li>';
+            if ($user) {
+                echo '<li>تامین کننده: ' . esc_html($user->display_name) . '</li>';
+            }
         }
         if ($filter_status) {
             echo '<li>وضعیت: ' . esc_html($filter_status) . '</li>';
@@ -2192,9 +2202,11 @@ function asg_reports_main_page() {
                     case 'image':
                         if (!empty($row->image_id)) {
                             $image_url = wp_get_attachment_url($row->image_id);
-                            echo '<a href="' . esc_url($image_url) . '" target="_blank">';
-                            echo '<img src="' . esc_url($image_url) . '" style="max-width: 100px; height: auto;">';
-                            echo '</a>';
+                            if ($image_url) {
+                                echo '<a href="' . esc_url($image_url) . '" target="_blank">';
+                                echo '<img src="' . esc_url($image_url) . '" style="max-width: 100px; height: auto;">';
+                                echo '</a>';
+                            }
                         } else {
                             echo '-';
                         }
@@ -2214,7 +2226,8 @@ function asg_reports_main_page() {
             echo '</tr>';
         }
         echo '</tbody></table>';
-// فوتر پرینت
+
+        // فوتر پرینت
         echo '<div class="print-footer">';
         echo '<p>تاریخ گزارش: ' . date_i18n('Y/m/d H:i:s') . '</p>';
         echo '<p>کاربر: ' . wp_get_current_user()->display_name . '</p>';
@@ -2302,8 +2315,61 @@ function asg_reports_main_page() {
                 e.preventDefault();
                 window.print();
             });
+
+            // اضافه کردن نمایش لودینگ هنگام دانلود اکسل
+            $('a.button-secondary[href*="export=excel"]').click(function() {
+                $(this).addClass('updating-message').text('در حال آماده‌سازی فایل...');
+            });
         });
         </script>
+
+        <style>
+        .asg-filter-row {
+            margin: 15px 0;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .asg-filter {
+            flex: 1;
+            min-width: 200px;
+        }
+        .asg-filter label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .asg-column-selector {
+            margin: 20px 0;
+            padding: 15px;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .asg-column-selector label {
+            margin-right: 15px;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+        .asg-export-buttons {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .asg-export-buttons .button {
+            display: inline-flex;
+            align-items: center;
+        }
+        .asg-export-buttons .dashicons {
+            margin-right: 5px;
+        }
+        @media print {
+            .select2-container {
+                display: none;
+            }
+        }
+        </style>
         <?php
     });
 }
