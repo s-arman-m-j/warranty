@@ -1102,7 +1102,13 @@ function asg_show_requests_table() {
     $filter_user = isset($_GET['filter_user']) ? intval($_GET['filter_user']) : '';
     $filter_tamin = isset($_GET['filter_tamin']) ? intval($_GET['filter_tamin']) : '';
     $filter_status = isset($_GET['filter_status']) ? sanitize_text_field($_GET['filter_status']) : '';
-    $filter_receipt_date = isset($_GET['filter_receipt_date']) ? sanitize_text_field($_GET['filter_receipt_date']) : '';
+    $filter_receipt_year = isset($_GET['filter_receipt_year']) ? intval($_GET['filter_receipt_year']) : '';
+    $filter_receipt_month = isset($_GET['filter_receipt_month']) ? sanitize_text_field($_GET['filter_receipt_month']) : '';
+
+    // تنظیمات صفحه‌بندی
+    $per_page = 10;
+    $current_page = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
+    $offset = ($current_page - 1) * $per_page;
 
     // Build WHERE conditions based on filter values
     if (!empty($filter_id)) {
@@ -1125,32 +1131,49 @@ function asg_show_requests_table() {
         $where[] = "status = %s";
         $query_vars[] = $filter_status;
     }
-    if (!empty($filter_receipt_date)) {
-        // Assuming receipt_date is stored in receipt_day, receipt_month, receipt_year
-        // For simplicity, filter by receipt_year
+    if (!empty($filter_receipt_year)) {
         $where[] = "receipt_year = %d";
-        $query_vars[] = intval($filter_receipt_date);
+        $query_vars[] = $filter_receipt_year;
+    }
+    if (!empty($filter_receipt_month)) {
+        $where[] = "receipt_month = %s";
+        $query_vars[] = $filter_receipt_month;
     }
 
     // Build the final WHERE clause
-    if (!empty($where)) {
-        $where_clause = " WHERE " . implode(" AND ", $where);
-    } else {
-        $where_clause = "";
-    }
+    $where_clause = !empty($where) ? " WHERE " . implode(" AND ", $where) : "";
 
-    // Prepare the SQL query with filters
-    $sql = $wpdb->prepare("SELECT * FROM $table_name" . $where_clause, $query_vars);
+    // Get total count for pagination
+    $total_items = $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM $table_name" . $where_clause,
+        $query_vars
+    ));
+    $total_pages = ceil($total_items / $per_page);
+
+    // Prepare the SQL query with filters and pagination
+    $query_vars[] = $per_page;
+    $query_vars[] = $offset;
+    $sql = $wpdb->prepare(
+        "SELECT * FROM $table_name" . $where_clause . " ORDER BY id DESC LIMIT %d OFFSET %d",
+        $query_vars
+    );
     $requests = $wpdb->get_results($sql);
 
     // Start the table HTML
+    echo '<div class="wrap">';
+    echo '<h1>لیست درخواست‌های گارانتی</h1>';
+    
+    // Filters form
     echo '<form method="get" action="">';
-    echo '<input type="hidden" name="page" value="asg-guarantee">';
+    echo '<input type="hidden" name="page" value="warranty-management">';
+    echo '<div class="tablenav top">';
     echo '<div class="alignleft actions">';
-    echo '<label for="filter_id">ID:</label>';
-    echo '<input type="number" name="filter_id" id="filter_id" value="' . esc_attr($filter_id) . '">';
-    echo '<label for="filter_product">محصول:</label>';
-    echo '<select name="filter_product" id="filter_product">';
+    
+    // ID filter
+    echo '<input type="number" name="filter_id" id="filter_id" placeholder="شماره" value="' . esc_attr($filter_id) . '" style="width: 80px;">';
+    
+    // Product filter
+    echo '<select name="filter_product" id="filter_product" style="width: 200px;">';
     echo '<option value="">تمامی محصولات</option>';
     $products = wc_get_products(array('status' => 'publish', 'limit' => -1));
     foreach ($products as $product) {
@@ -1158,8 +1181,9 @@ function asg_show_requests_table() {
         echo '<option value="' . $product->get_id() . '" ' . $selected . '>' . $product->get_name() . '</option>';
     }
     echo '</select>';
-    echo '<label for="filter_user">مشتری:</label>';
-    echo '<select name="filter_user" id="filter_user">';
+    
+    // User filter
+    echo '<select name="filter_user" id="filter_user" style="width: 150px;">';
     echo '<option value="">تمامی مشتریان</option>';
     $users = get_users();
     foreach ($users as $user) {
@@ -1167,8 +1191,9 @@ function asg_show_requests_table() {
         echo '<option value="' . $user->ID . '" ' . $selected . '>' . $user->display_name . '</option>';
     }
     echo '</select>';
-    echo '<label for="filter_tamin">تامین‌کننده:</label>';
-    echo '<select name="filter_tamin" id="filter_tamin">';
+    
+    // Tamin filter
+    echo '<select name="filter_tamin" id="filter_tamin" style="width: 150px;">';
     echo '<option value="">تمامی تامین‌کنندگان</option>';
     $tamin_users = get_users(array('role' => 'tamin'));
     foreach ($tamin_users as $user) {
@@ -1176,8 +1201,9 @@ function asg_show_requests_table() {
         echo '<option value="' . $user->ID . '" ' . $selected . '>' . $user->display_name . '</option>';
     }
     echo '</select>';
-    echo '<label for="filter_status">وضعیت:</label>';
-    echo '<select name="filter_status" id="filter_status">';
+    
+    // Status filter
+    echo '<select name="filter_status" id="filter_status" style="width: 120px;">';
     echo '<option value="">تمامی وضعیت‌ها</option>';
     $statuses = get_option('asg_statuses', array('آماده ارسال', 'ارسال شده', 'تعویض شده', 'خارج از گارانتی'));
     foreach ($statuses as $status) {
@@ -1185,53 +1211,158 @@ function asg_show_requests_table() {
         echo '<option value="' . $status . '" ' . $selected . '>' . $status . '</option>';
     }
     echo '</select>';
-    echo '<label for="filter_receipt_date">تاریخ دریافت:</label>';
-    echo '<input type="text" name="filter_receipt_date" id="filter_receipt_date" value="' . esc_attr($filter_receipt_date) . '">';
-    echo '<input type="submit" value="فیلتر" class="button">';
+
+    // Year filter
+    echo '<select name="filter_receipt_year" id="filter_receipt_year" style="width: 100px;">';
+    echo '<option value="">سال دریافت</option>';
+    for ($year = 1402; $year <= 1410; $year++) {
+        $selected = ($year == $filter_receipt_year) ? 'selected' : '';
+        echo '<option value="' . $year . '" ' . $selected . '>' . $year . '</option>';
+    }
+    echo '</select>';
+
+    // Month filter
+    echo '<select name="filter_receipt_month" id="filter_receipt_month" style="width: 100px;">';
+    echo '<option value="">ماه دریافت</option>';
+    $months = array(
+        'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور',
+        'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'
+    );
+    foreach ($months as $month) {
+        $selected = ($month == $filter_receipt_month) ? 'selected' : '';
+        echo '<option value="' . $month . '" ' . $selected . '>' . $month . '</option>';
+    }
+    echo '</select>';
+    
+    // Filter buttons
+    echo '<input type="submit" value="اعمال فیلتر" class="button">';
+    echo '<a href="' . admin_url('admin.php?page=warranty-management') . '" class="button">حذف فیلترها</a>';
+    
+    echo '</div>';
     echo '</div>';
     echo '</form>';
 
+    // Table
     echo '<table class="wp-list-table widefat fixed striped">';
-    echo '<thead><tr><th>ID</th><th>محصول</th><th>مشتری</th><th>تامین‌کننده</th><th>وضعیت</th><th>تاریخ دریافت</th><th>عکس</th><th>یادداشت‌ها</th><th>عملیات</th></tr></thead>';
+    echo '<thead>
+        <tr>
+            <th width="60">شماره</th>
+            <th width="150">محصول</th>
+            <th width="120">مشتری</th>
+            <th width="120">تامین‌کننده</th>
+            <th width="100">وضعیت</th>
+            <th width="120">تاریخ دریافت</th>
+            <th width="60">عکس</th>
+            <th>یادداشت‌ها</th>
+            <th width="80">عملیات</th>
+        </tr>
+    </thead>';
     echo '<tbody>';
-    foreach ($requests as $request) {
-        echo '<tr>';
-        echo '<td>' . $request->id . '</td>';
-        echo '<td>' . get_the_title($request->product_id) . '</td>';
-        echo '<td>' . get_userdata($request->user_id)->display_name . '</td>';
-        echo '<td>' . ($request->tamin_user_id ? get_userdata($request->tamin_user_id)->display_name : '-') . '</td>';
-        echo '<td>' . $request->status . '</td>';
-        echo '<td>' . $request->receipt_day . ' ' . $request->receipt_month . ' ' . $request->receipt_year . '</td>';
-        // Display image
-        echo '<td>';
-        if ($request->image_id) {
-            $image_url = wp_get_attachment_url($request->image_id);
-            if ($image_url) {
-                echo '<img src="' . esc_url($image_url) . '" style="max-width: 50px; height: auto;">';
+    
+    if ($requests) {
+        foreach ($requests as $request) {
+            echo '<tr>';
+            echo '<td>' . $request->id . '</td>';
+            echo '<td>' . get_the_title($request->product_id) . '</td>';
+            echo '<td>' . get_userdata($request->user_id)->display_name . '</td>';
+            echo '<td>' . ($request->tamin_user_id ? get_userdata($request->tamin_user_id)->display_name : '-') . '</td>';
+            
+            // وضعیت با استایل
+            echo '<td>';
+            $status_class = '';
+            $status_text = $request->status;
+            switch ($request->status) {
+                case 'pending':
+                    $status_class = 'background: #fff6d9; color: #856404;';
+                    $status_text = 'در انتظار بررسی';
+                    break;
+                case 'approved':
+                    $status_class = 'background: #e5f5e8; color: #155724;';
+                    $status_text = 'تایید شده';
+                    break;
+                case 'rejected':
+                    $status_class = 'background: #ffebee; color: #721c24;';
+                    $status_text = 'رد شده';
+                    break;
             }
-        } else {
-            echo '-';
-        }
-        echo '</td>';
-        // Display notes
-        echo '<td>';
-        $notes = $wpdb->get_results($wpdb->prepare("SELECT * FROM {$wpdb->prefix}asg_guarantee_notes WHERE request_id = %d ORDER BY created_at DESC", $request->id));
-        if ($notes) {
-            echo '<ul>';
-            foreach ($notes as $note) {
-                echo '<li>' . esc_html($note->note) . ' - <small>' . esc_html($note->created_at) . '</small></li>';
+            echo '<span style="display: inline-block; padding: 3px 8px; border-radius: 3px; ' . $status_class . '">';
+            echo $status_text;
+            echo '</span>';
+            echo '</td>';
+            
+            echo '<td>' . $request->receipt_day . ' ' . $request->receipt_month . ' ' . $request->receipt_year . '</td>';
+            
+            // نمایش آیکون عکس
+            echo '<td style="text-align: center;">';
+            if ($request->image_id) {
+                echo '<span class="dashicons dashicons-yes-alt" style="color: #46b450;" title="دارای تصویر"></span>';
+            } else {
+                echo '<span class="dashicons dashicons-no-alt" style="color: #dc3232;" title="بدون تصویر"></span>';
             }
-            echo '</ul>';
-        } else {
-            echo '-';
+            echo '</td>';
+            
+            // نمایش دو یادداشت آخر
+            echo '<td>';
+            $notes = $wpdb->get_results($wpdb->prepare(
+                "SELECT * FROM {$wpdb->prefix}asg_guarantee_notes 
+                WHERE request_id = %d 
+                ORDER BY created_at DESC 
+                LIMIT 2",
+                $request->id
+            ));
+            if ($notes) {
+                foreach ($notes as $note) {
+                    echo '<div style="margin-bottom: 5px;">';
+                    echo '<small style="color: #666; font-size: 11px;">' . 
+                         date_i18n('Y/m/d H:i', strtotime($note->created_at)) . '</small>';
+                    echo '<p style="margin: 2px 0; font-size: 12px;">' . 
+                         wp_trim_words(esc_html($note->note), 10, '...') . '</p>';
+                    echo '</div>';
+                }
+            } else {
+                echo '-';
+            }
+            echo '</td>';
+            
+            // دکمه ویرایش
+            echo '<td>';
+            echo '<a href="' . admin_url('admin.php?page=warranty-management-edit&id=' . $request->id) . '" class="button button-small">ویرایش</a>';
+            echo '</td>';
+            echo '</tr>';
         }
-        echo '</td>';
-        // Edit link
-        echo '<td><a href="' . admin_url('admin.php?page=asg-edit-guarantee&id=' . $request->id) . '" class="button">ویرایش</a></td>';
-        echo '</tr>';
+    } else {
+        echo '<tr><td colspan="9">موردی یافت نشد.</td></tr>';
     }
+    
     echo '</tbody>';
     echo '</table>';
+
+    // Pagination
+    if ($total_pages > 1) {
+        echo '<div class="tablenav bottom">';
+        echo '<div class="tablenav-pages">';
+        echo paginate_links(array(
+            'base' => add_query_arg('paged', '%#%'),
+            'format' => '',
+            'prev_text' => __('&laquo;'),
+            'next_text' => __('&raquo;'),
+            'total' => $total_pages,
+            'current' => $current_page,
+            'add_args' => array_filter([
+                'filter_id' => $filter_id,
+                'filter_product' => $filter_product,
+                'filter_user' => $filter_user,
+                'filter_tamin' => $filter_tamin,
+                'filter_status' => $filter_status,
+                'filter_receipt_year' => $filter_receipt_year,
+                'filter_receipt_month' => $filter_receipt_month,
+            ])
+        ));
+        echo '</div>';
+        echo '</div>';
+    }
+
+    echo '</div>'; // end wrap
 }
 
 // انتقال اسکریپت‌ها و استایل‌ها
