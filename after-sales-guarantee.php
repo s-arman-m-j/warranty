@@ -1886,11 +1886,11 @@ function asg_reports_main_page() {
     $filter_customer = isset($_GET['filter_customer']) ? intval($_GET['filter_customer']) : '';
     $filter_status = isset($_GET['filter_status']) ? sanitize_text_field($_GET['filter_status']) : '';
     $filter_product = isset($_GET['filter_product']) ? intval($_GET['filter_product']) : '';
-    $selected_columns = isset($_GET['columns']) ? (array)$_GET['columns'] : array();
+    $selected_columns = isset($_GET['columns']) ? (array)$_GET['columns'] : array('id', 'product_name', 'customer_name', 'status', 'receipt_date');
     $date_from = isset($_GET['date_from']) ? sanitize_text_field($_GET['date_from']) : '';
     $date_to = isset($_GET['date_to']) ? sanitize_text_field($_GET['date_to']) : '';
 
-    // ستون های قابل انتخاب
+    // تعریف ستون‌های موجود
     $available_columns = array(
         'id' => 'ID درخواست',
         'product_name' => 'نام محصول',
@@ -1905,12 +1905,136 @@ function asg_reports_main_page() {
         'notes_count' => 'تعداد یادداشت‌ها'
     );
 
-    // اگر هیچ ستونی انتخاب نشده، پیش‌فرض‌ها را نمایش بده
-    if (empty($selected_columns)) {
-        $selected_columns = array('id', 'product_name', 'customer_name', 'status', 'receipt_date');
+    // اگر درخواست خروجی اکسل است
+    if (isset($_GET['export']) && $_GET['export'] === 'excel') {
+        ob_clean();
+        ob_start();
+        
+        // تنظیم هدرهای لازم برای دانلود فایل اکسل
+        header('Content-Type: application/vnd.ms-excel; charset=utf-8');
+        header('Content-Disposition: attachment;filename="warranty-report-' . date('Y-m-d') . '.xls"');
+        header('Cache-Control: max-age=0');
+        header('Cache-Control: max-age=1');
+        
+        // خروجی به صورت UTF-8 با BOM برای پشتیبانی از فارسی
+        echo chr(0xEF) . chr(0xBB) . chr(0xBF);
+
+        // ساخت SELECT برای کوئری
+        $select = array();
+        foreach ($selected_columns as $col) {
+            switch ($col) {
+                case 'product_name':
+                    $select[] = 'p.post_title as product_name';
+                    break;
+                case 'customer_name':
+                    $select[] = 'cu.display_name as customer_name';
+                    break;
+                case 'tamin_name':
+                    $select[] = 'tu.display_name as tamin_name';
+                    break;
+                case 'receipt_date':
+                    $select[] = "CONCAT(r.receipt_day, '/', r.receipt_month, '/', r.receipt_year) as receipt_date";
+                    break;
+                case 'notes_count':
+                    $select[] = '(SELECT COUNT(*) FROM ' . $wpdb->prefix . 'asg_guarantee_notes n WHERE n.request_id = r.id) as notes_count';
+                    break;
+                default:
+                    $select[] = 'r.' . $col;
+                    break;
+            }
+        }
+
+        // ساخت شروط WHERE
+        $where = array();
+        $params = array();
+
+        if (!empty($filter_tamin)) {
+            $where[] = 'r.tamin_user_id = %d';
+            $params[] = $filter_tamin;
+        }
+        if (!empty($filter_customer)) {
+            $where[] = 'r.user_id = %d';
+            $params[] = $filter_customer;
+        }
+        if (!empty($filter_status)) {
+            $where[] = 'r.status = %s';
+            $params[] = $filter_status;
+        }
+        if (!empty($filter_product)) {
+            $where[] = 'r.product_id = %d';
+            $params[] = $filter_product;
+        }
+        if (!empty($date_from) && !empty($date_to)) {
+            $where[] = 'r.created_at BETWEEN %s AND %s';
+            $params[] = $date_from . ' 00:00:00';
+            $params[] = $date_to . ' 23:59:59';
+        }
+
+        $where_sql = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
+
+        // ساخت و اجرای کوئری نهایی
+        $sql = "
+            SELECT DISTINCT " . implode(', ', $select) . "
+            FROM {$wpdb->prefix}asg_guarantee_requests r
+            LEFT JOIN {$wpdb->posts} p ON r.product_id = p.ID
+            LEFT JOIN {$wpdb->users} cu ON r.user_id = cu.ID
+            LEFT JOIN {$wpdb->users} tu ON r.tamin_user_id = tu.ID
+            $where_sql
+            ORDER BY r.id DESC
+        ";
+
+        if (!empty($params)) {
+            $sql = $wpdb->prepare($sql, $params);
+        }
+
+        $results = $wpdb->get_results($sql);
+
+        // ساخت جدول اکسل
+        echo '<table border="1" dir="rtl">';
+        
+        // هدر جدول
+        echo '<tr>';
+        foreach ($selected_columns as $col) {
+            if (isset($available_columns[$col])) {
+                echo '<th style="background-color: #f0f0f0; font-weight: bold; text-align: center; padding: 5px;">' . 
+                     $available_columns[$col] . '</th>';
+            }
+        }
+        echo '</tr>';
+
+        // داده‌های جدول
+        if (!empty($results)) {
+            foreach ($results as $row) {
+                echo '<tr>';
+                foreach ($selected_columns as $col) {
+                    echo '<td style="text-align: right; padding: 5px;">';
+                    switch ($col) {
+                        case 'notes_count':
+                            echo isset($row->notes_count) ? $row->notes_count : '0';
+                            break;
+                        case 'image':
+                            echo !empty($row->image_id) ? 'دارد' : 'ندارد';
+                            break;
+                        case 'created_at':
+                            echo isset($row->created_at) ? date('Y/m/d H:i', strtotime($row->created_at)) : '-';
+                            break;
+                        default:
+                            echo isset($row->$col) ? $row->$col : '-';
+                    }
+                    echo '</td>';
+                }
+                echo '</tr>';
+            }
+        }
+        
+        echo '</table>';
+        
+        ob_end_flush();
+        exit;
     }
 
-    // ساخت بخش SELECT
+    // کد برای نمایش صفحه اصلی
+    // ساخت SELECT برای نمایش در صفحه
     $select = array();
     foreach ($selected_columns as $col) {
         switch ($col) {
@@ -1924,7 +2048,7 @@ function asg_reports_main_page() {
                 $select[] = 'tu.display_name as tamin_name';
                 break;
             case 'receipt_date':
-                $select[] = 'CONCAT(r.receipt_day, " ", r.receipt_month, " ", r.receipt_year) as receipt_date';
+                $select[] = "CONCAT(r.receipt_day, '/', r.receipt_month, '/', r.receipt_year) as receipt_date";
                 break;
             case 'image':
                 $select[] = 'r.image_id';
@@ -1937,16 +2061,8 @@ function asg_reports_main_page() {
                 break;
         }
     }
-    $select_sql = implode(', ', $select);
 
-    // ساخت بخش JOIN
-    $join_sql = "
-        LEFT JOIN {$wpdb->posts} p ON r.product_id = p.ID
-        LEFT JOIN {$wpdb->users} cu ON r.user_id = cu.ID
-        LEFT JOIN {$wpdb->users} tu ON r.tamin_user_id = tu.ID
-    ";
-
-    // ساخت شرط های WHERE
+    // ساخت شروط WHERE برای نمایش در صفحه
     $where = array();
     $params = array();
 
@@ -1954,22 +2070,18 @@ function asg_reports_main_page() {
         $where[] = 'r.tamin_user_id = %d';
         $params[] = $filter_tamin;
     }
-
     if (!empty($filter_customer)) {
         $where[] = 'r.user_id = %d';
         $params[] = $filter_customer;
     }
-
     if (!empty($filter_status)) {
         $where[] = 'r.status = %s';
         $params[] = $filter_status;
     }
-
     if (!empty($filter_product)) {
         $where[] = 'r.product_id = %d';
         $params[] = $filter_product;
     }
-
     if (!empty($date_from) && !empty($date_to)) {
         $where[] = 'r.created_at BETWEEN %s AND %s';
         $params[] = $date_from . ' 00:00:00';
@@ -1978,71 +2090,15 @@ function asg_reports_main_page() {
 
     $where_sql = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
 
-    // اگر درخواست خروجی اکسل است
-    if (isset($_GET['export']) && $_GET['export'] === 'excel') {
-        // تنظیم هدرهای لازم برای دانلود فایل اکسل
-        header('Content-Type: application/vnd.ms-excel; charset=utf-8');
-        header('Content-Disposition: attachment;filename="warranty-report-' . date('Y-m-d') . '.xls"');
-        header('Cache-Control: max-age=0');
-        
-        // خروجی به صورت UTF-8 با BOM برای پشتیبانی از فارسی
-        echo chr(0xEF) . chr(0xBB) . chr(0xBF);
-
-        // ساخت کوئری
-        $sql = "
-            SELECT $select_sql
-            FROM {$wpdb->prefix}asg_guarantee_requests r
-            $join_sql
-            $where_sql
-            ORDER BY r.created_at DESC
-        ";
-
-        if (!empty($params)) {
-            $sql = $wpdb->prepare($sql, $params);
-        }
-
-        $results = $wpdb->get_results($sql);
-        
-        // ایجاد هدر جدول
-        echo "<table border='1'>";
-        echo "<tr>";
-        foreach ($selected_columns as $col) {
-            echo "<th>" . esc_html($available_columns[$col]) . "</th>";
-        }
-        echo "</tr>";
-        
-        // نمایش داده‌ها
-        foreach ($results as $row) {
-            echo "<tr>";
-            foreach ($selected_columns as $col) {
-                echo "<td>";
-                switch ($col) {
-                    case 'image':
-                        echo !empty($row->image_id) ? 'دارد' : 'ندارد';
-                        break;
-                    case 'notes_count':
-                        echo esc_html($row->notes_count);
-                        break;
-                    default:
-                        $value = isset($row->$col) ? $row->$col : '-';
-                        echo esc_html($value);
-                        break;
-                }
-                echo "</td>";
-            }
-            echo "</tr>";
-        }
-        echo "</table>";
-        exit;
-    }
-
-    // ساخت کوئری اصلی با محدودیت تعداد نتایج
+    // ساخت و اجرای کوئری نهایی برای نمایش در صفحه
     $sql = "
-        SELECT $select_sql
+        SELECT DISTINCT " . implode(', ', $select) . "
         FROM {$wpdb->prefix}asg_guarantee_requests r
-        $join_sql
+        LEFT JOIN {$wpdb->posts} p ON r.product_id = p.ID
+        LEFT JOIN {$wpdb->users} cu ON r.user_id = cu.ID
+        LEFT JOIN {$wpdb->users} tu ON r.tamin_user_id = tu.ID
         $where_sql
-        ORDER BY r.created_at DESC
+        ORDER BY r.id DESC
         LIMIT 500
     ";
 
@@ -2052,278 +2108,161 @@ function asg_reports_main_page() {
 
     $results = $wpdb->get_results($sql);
 
-    // شروع نمایش گزارشات
-    echo '<div class="wrap">';
-    echo '<h1>گزارشات پیشرفته گارانتی</h1>';
-    
-    // فرم فیلترها
-    echo '<form method="get" action="" class="asg-report-filters">';
-    echo '<input type="hidden" name="page" value="warranty-management-reports">';
-    
-    // ردیف اول فیلترها
-    echo '<div class="asg-filter-row">';
-    
-    // فیلتر مشتری با جستجوی Ajax
-    echo '<div class="asg-filter">';
-    echo '<label>مشتری:</label>';
-    echo '<select name="filter_customer" id="filter_customer" class="asg-select2-customer">';
-    if ($filter_customer) {
-        $user = get_user_by('id', $filter_customer);
-        if ($user) {
-            echo '<option value="' . esc_attr($filter_customer) . '" selected>' . esc_html($user->display_name) . '</option>';
-        }
-    }
-    echo '</select>';
-    echo '</div>';
-    
-    // فیلتر تامین کننده با جستجوی Ajax
-    echo '<div class="asg-filter">';
-    echo '<label>تامین کننده:</label>';
-    echo '<select name="filter_tamin" id="filter_tamin" class="asg-select2-tamin">';
-    if ($filter_tamin) {
-        $user = get_user_by('id', $filter_tamin);
-        if ($user) {
-            echo '<option value="' . esc_attr($filter_tamin) . '" selected>' . esc_html($user->display_name) . '</option>';
-        }
-    }
-    echo '</select>';
-    echo '</div>';
-    
-    // فیلتر وضعیت
-    echo '<div class="asg-filter">';
-    echo '<label>وضعیت:</label>';
-    echo '<select name="filter_status">';
-    echo '<option value="">همه وضعیت‌ها</option>';
-    $statuses = get_option('asg_statuses', array('آماده ارسال', 'ارسال شده', 'تعویض شده', 'خارج از گارانتی'));
-    foreach ($statuses as $status) {
-        $selected = ($status == $filter_status) ? 'selected' : '';
-        echo '<option value="' . esc_attr($status) . '" ' . $selected . '>' . esc_html($status) . '</option>';
-    }
-    echo '</select>';
-    echo '</div>';
-    
-    echo '</div>'; // پایان ردیف اول
-    
-    // ردیف دوم فیلترها
-    echo '<div class="asg-filter-row">';
-    
-    // فیلتر محصول
-    echo '<div class="asg-filter">';
-    echo '<label>محصول:</label>';
-    echo '<select name="filter_product" id="filter_product" class="asg-select2-product">';
-    if ($filter_product) {
-        $product = wc_get_product($filter_product);
-        if ($product) {
-            echo '<option value="' . esc_attr($filter_product) . '" selected>' . esc_html($product->get_name()) . '</option>';
-        }
-    }
-    echo '</select>';
-    echo '</div>';
-    
-    // فیلتر تاریخ
-    echo '<div class="asg-filter">';
-    echo '<label>تاریخ ایجاد:</label>';
-    echo '<input type="date" name="date_from" value="' . esc_attr($date_from) . '" placeholder="از تاریخ">';
-    echo '<input type="date" name="date_to" value="' . esc_attr($date_to) . '" placeholder="تا تاریخ">';
-    echo '</div>';
-    
-    echo '</div>'; // پایان ردیف دوم
-    
-    // انتخاب ستون‌ها
-    echo '<div class="asg-column-selector">';
-    echo '<h3>انتخاب ستون‌های گزارش:</h3>';
-    foreach ($available_columns as $key => $label) {
-        $checked = in_array($key, $selected_columns) ? 'checked' : '';
-        echo '<label>';
-        echo '<input type="checkbox" name="columns[]" value="' . esc_attr($key) . '" ' . $checked . '>';
-        echo esc_html($label);
-        echo '</label>';
-    }
-    echo '</div>';
-    
-    // دکمه‌های اکسل و پرینت
-    echo '<div class="asg-export-buttons">';
-    echo '<button type="submit" class="button button-primary">اعمال فیلترها</button>';
-    echo '<a href="' . esc_url(add_query_arg('export', 'excel', $_SERVER['REQUEST_URI'])) . '" class="button button-secondary"><span class="dashicons dashicons-media-spreadsheet"></span> خروجی اکسل</a>';
-    echo '<button type="button" class="button button-secondary print-preview"><span class="dashicons dashicons-printer"></span> پیش‌نمایش چاپ</button>';
-    echo '<a href="' . admin_url('admin.php?page=warranty-management-reports') . '" class="button">پاکسازی فیلترها</a>';
-    echo '</div>';
-    
-    echo '</form>';
-
-    // نمایش نتایج
-    if (!empty($results)) {
-        // هدر پرینت
-        echo '<div class="print-header">';
-        echo '<h2>گزارش درخواست‌های گارانتی</h2>';
-        echo '<p>فیلترهای اعمال شده:</p>';
-        echo '<ul>';
-        if ($filter_customer) {
-            $user = get_user_by('id', $filter_customer);
-            if ($user) {
-                echo '<li>مشتری: ' . esc_html($user->display_name) . '</li>';
-            }
-        }
-        if ($filter_tamin) {
-            $user = get_user_by('id', $filter_tamin);
-            if ($user) {
-                echo '<li>تامین کننده: ' . esc_html($user->display_name) . '</li>';
-            }
-        }
-        if ($filter_status) {
-            echo '<li>وضعیت: ' . esc_html($filter_status) . '</li>';
-        }
-        if ($filter_product) {
-            $product = wc_get_product($filter_product);
-            if ($product) {
-                echo '<li>محصول: ' . esc_html($product->get_name()) . '</li>';
-            }
-        }
-        if ($date_from && $date_to) {
-            echo '<li>بازه زمانی: از ' . esc_html($date_from) . ' تا ' . esc_html($date_to) . '</li>';
-        }
-        echo '</ul>';
-        echo '</div>';
-
-        // نمایش جدول
-        echo '<div class="asg-report-results">';
-        echo '<table class="wp-list-table widefat fixed striped">';
-        echo '<thead><tr>';
-        foreach ($selected_columns as $col) {
-            echo '<th>' . esc_html($available_columns[$col]) . '</th>';
-        }
-        echo '</tr></thead>';
-        echo '<tbody>';
-        foreach ($results as $row) {
-            echo '<tr>';
-            foreach ($selected_columns as $col) {
-                echo '<td>';
-                switch ($col) {
-                    case 'image':
-                        if (!empty($row->image_id)) {
-                            $image_url = wp_get_attachment_url($row->image_id);
-                            if ($image_url) {
-                                echo '<a href="' . esc_url($image_url) . '" target="_blank">';
-                                echo '<img src="' . esc_url($image_url) . '" style="max-width: 100px; height: auto;">';
-                                echo '</a>';
-                            }
-                        } else {
-                            echo '-';
-                        }
-                        break;
-                    case 'notes_count':
-                        echo '<a href="' . admin_url('admin.php?page=warranty-management-edit&id=' . $row->id) . '">';
-                        echo esc_html($row->notes_count);
-                        echo '</a>';
-                        break;
-                    default:
-                        $value = isset($row->$col) ? $row->$col : '-';
-                        echo esc_html($value);
-                        break;
-                }
-                echo '</td>';
-            }
-            echo '</tr>';
-        }
-        echo '</tbody></table>';
-
-        // فوتر پرینت
-        echo '<div class="print-footer">';
-        echo '<p>تاریخ گزارش: ' . date_i18n('Y/m/d H:i:s') . '</p>';
-        echo '<p>کاربر: ' . wp_get_current_user()->display_name . '</p>';
-        echo '</div>';
+    // شروع نمایش صفحه
+    ?>
+    <div class="wrap">
+        <h1>گزارشات پیشرفته گارانتی</h1>
         
-        echo '</div>'; // پایان asg-report-results
-    } else {
-        echo '<p class="asg-no-results">هیچ موردی با فیلترهای انتخاب شده یافت نشد.</p>';
-    }
+        <form method="get" action="" class="asg-report-filters">
+            <input type="hidden" name="page" value="warranty-management-reports">
+            
+            <div class="asg-filter-row">
+                <div class="asg-filter">
+                    <label>مشتری:</label>
+                    <select name="filter_customer" id="filter_customer" class="asg-select2-customer">
+                        <?php if ($filter_customer): ?>
+                            <?php $user = get_user_by('id', $filter_customer); ?>
+                            <?php if ($user): ?>
+                                <option value="<?php echo esc_attr($filter_customer); ?>" selected>
+                                    <?php echo esc_html($user->display_name); ?>
+                                </option>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                    </select>
+                </div>
 
-    echo '</div>'; // پایان wrap
-    
-    // افزودن اسکریپت‌های لازم
-    add_action('admin_footer', function() {
-        ?>
-        <script>
-        jQuery(document).ready(function($) {
-            // Select2 برای مشتری
-            $('.asg-select2-customer').select2({
-                ajax: {
-                    url: ajaxurl,
-                    dataType: 'json',
-                    delay: 250,
-                    data: function(params) {
-                        return {
-                            action: 'asg_search_users',
-                            search: params.term,
-                            role: 'customer'
-                        };
-                    },
-                    processResults: function(data) {
-                        return { results: data };
-                    }
-                },
-                minimumInputLength: 2,
-                placeholder: 'جستجوی مشتری...',
-                width: '100%'
-            });
+                <div class="asg-filter">
+                    <label>تامین کننده:</label>
+                    <select name="filter_tamin" id="filter_tamin" class="asg-select2-tamin">
+                        <?php if ($filter_tamin): ?>
+                            <?php $user = get_user_by('id', $filter_tamin); ?>
+                            <?php if ($user): ?>
+                                <option value="<?php echo esc_attr($filter_tamin); ?>" selected>
+                                    <?php echo esc_html($user->display_name); ?>
+                                </option>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                    </select>
+                </div>
 
-            // Select2 برای تامین کننده
-            $('.asg-select2-tamin').select2({
-                ajax: {
-                    url: ajaxurl,
-                    dataType: 'json',
-                    delay: 250,
-                    data: function(params) {
-                        return {
-                            action: 'asg_search_users',
-                            search: params.term,
-                            role: 'tamin'
-                        };
-                    },
-                    processResults: function(data) {
-                        return { results: data };
-                    }
-                },
-                minimumInputLength: 2,
-                placeholder: 'جستجوی تامین کننده...',
-                width: '100%'
-            });
+                <div class="asg-filter">
+                    <label>وضعیت:</label>
+                    <select name="filter_status">
+                        <option value="">همه وضعیت‌ها</option>
+                        <?php 
+                        $statuses = get_option('asg_statuses', array('آماده ارسال', 'ارسال شده', 'تعویض شده', 'خارج از گارانتی'));
+                        foreach ($statuses as $status): 
+                            $selected = ($status == $filter_status) ? 'selected' : '';
+                        ?>
+                            <option value="<?php echo esc_attr($status); ?>" <?php echo $selected; ?>>
+                                <?php echo esc_html($status); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
 
-            // Select2 برای محصولات
-            $('.asg-select2-product').select2({
-                ajax: {
-                    url: ajaxurl,
-                    dataType: 'json',
-                    delay: 250,
-                    data: function(params) {
-                        return {
-                            action: 'asg_search_products',
-                            search: params.term
-                        };
-                    },
-                    processResults: function(data) {
-                        return { results: data };
-                    }
-                },
-                minimumInputLength: 2,
-                placeholder: 'جستجوی محصول...',
-                width: '100%'
-            });
+                <div class="asg-filter">
+                    <label>محصول:</label>
+                    <select name="filter_product" id="filter_product" class="asg-select2-product">
+                        <?php if ($filter_product): ?>
+                            <?php $product = wc_get_product($filter_product); ?>
+                            <?php if ($product): ?>
+                                <option value="<?php echo esc_attr($filter_product); ?>" selected>
+                                    <?php echo esc_html($product->get_name()); ?>
+                                </option>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                    </select>
+                </div>
+            </div>
 
-            // اضافه کردن عملکرد پرینت
-            $('.print-preview').click(function(e) {
-                e.preventDefault();
-                window.print();
-            });
+            <div class="asg-filter-row">
+                <div class="asg-filter">
+                    <label>تاریخ ایجاد:</label>
+                    <input type="date" name="date_from" value="<?php echo esc_attr($date_from); ?>" placeholder="از تاریخ">
+                    <input type="date" name="date_to" value="<?php echo esc_attr($date_to); ?>" placeholder="تا تاریخ">
+                </div>
+            </div>
 
-            // اضافه کردن نمایش لودینگ هنگام دانلود اکسل
-            $('a.button-secondary[href*="export=excel"]').click(function() {
-                $(this).addClass('updating-message').text('در حال آماده‌سازی فایل...');
-            });
-        });
-        </script>
+            <div class="asg-column-selector">
+                <h3>انتخاب ستون‌های گزارش:</h3>
+                <?php foreach ($available_columns as $key => $label): ?>
+                    <label>
+                        <input type="checkbox" name="columns[]" value="<?php echo esc_attr($key); ?>" 
+                               <?php checked(in_array($key, $selected_columns)); ?>>
+                        <?php echo esc_html($label); ?>
+                    </label>
+                <?php endforeach; ?>
+            </div>
 
-        <style>
+            <div class="asg-export-buttons">
+                <button type="submit" class="button button-primary">اعمال فیلترها</button>
+                <a href="<?php echo esc_url(add_query_arg('export', 'excel', $_SERVER['REQUEST_URI'])); ?>" 
+                   class="button button-secondary">
+                    <span class="dashicons dashicons-media-spreadsheet"></span> خروجی اکسل
+                </a>
+                <button type="button" class="button button-secondary print-preview">
+                    <span class="dashicons dashicons-printer"></span> پیش‌نمایش چاپ
+                </button>
+                <a href="<?php echo admin_url('admin.php?page=warranty-management-reports'); ?>" class="button">
+                    پاکسازی فیلترها
+                </a>
+            </div>
+        </form>
+
+        <?php if (!empty($results)): ?>
+            <div class="asg-report-results">
+                <table class="wp-list-table widefat fixed striped">
+                    <thead>
+                        <tr>
+                            <?php foreach ($selected_columns as $col): ?>
+                                <th><?php echo esc_html($available_columns[$col]); ?></th>
+                            <?php endforeach; ?>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($results as $row): ?>
+                            <tr>
+                                <?php foreach ($selected_columns as $col): ?>
+                                    <td>
+                                        <?php
+                                        switch ($col) {
+                                            case 'image':
+                                                if (!empty($row->image_id)) {
+                                                    $image_url = wp_get_attachment_url($row->image_id);
+                                                    if ($image_url) {
+                                                        echo '<a href="' . esc_url($image_url) . '" target="_blank">';
+                                                        echo '<img src="' . esc_url($image_url) . '" style="max-width: 100px; height: auto;">';
+                                                        echo '</a>';
+                                                    }
+                                                } else {
+                                                    echo '-';
+                                                }
+                                                break;
+                                            case 'notes_count':
+                                                echo '<a href="' . admin_url('admin.php?page=warranty-management-edit&id=' . $row->id) . '">';
+                                                echo esc_html($row->notes_count);
+                                                echo '</a>';
+                                                break;
+                                            default:
+                                                $value = isset($row->$col) ? $row->$col : '-';
+                                                echo esc_html($value);
+                                                break;
+                                        }
+                                        ?>
+                                    </td>
+                                <?php endforeach; ?>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php else: ?>
+            <p class="asg-no-results">هیچ موردی با فیلترهای انتخاب شده یافت نشد.</p>
+        <?php endif; ?>
+    </div>
+
+    <style>
         .asg-filter-row {
             margin: 15px 0;
             display: flex;
@@ -2365,13 +2304,110 @@ function asg_reports_main_page() {
             margin-right: 5px;
         }
         @media print {
-            .select2-container {
-                display: none;
+            .asg-filter-row,
+            .asg-column-selector,
+            .asg-export-buttons,
+            #adminmenumain,
+            #wpadminbar,
+            #wpfooter {
+                display: none !important;
+            }
+            .asg-report-results {
+                margin: 0;
+                padding: 0;
+            }
+            table {
+                border-collapse: collapse;
+                width: 100%;
+            }
+            th, td {
+                border: 1px solid #000;
+                padding: 8px;
+                text-align: right;
             }
         }
-        </style>
-        <?php
+    </style>
+
+    <script>
+    jQuery(document).ready(function($) {
+        // Select2 برای مشتری
+        $('.asg-select2-customer').select2({
+            ajax: {
+                url: ajaxurl,
+                dataType: 'json',
+                delay: 250,
+                data: function(params) {
+                    return {
+                        action: 'asg_search_users',
+                        search: params.term,
+                        role: 'customer'
+                    };
+                },
+                processResults: function(data) {
+                    return { results: data };
+                }
+            },
+            minimumInputLength: 2,
+            placeholder: 'جستجوی مشتری...',
+            width: '100%'
+        });
+
+        // Select2 برای تامین کننده
+        $('.asg-select2-tamin').select2({
+            ajax: {
+                url: ajaxurl,
+                dataType: 'json',
+                delay: 250,
+                data: function(params) {
+                    return {
+                        action: 'asg_search_users',
+                        search: params.term,
+                        role: 'tamin'
+                    };
+                },
+                processResults: function(data) {
+                    return { results: data };
+                }
+            },
+            minimumInputLength: 2,
+            placeholder: 'جستجوی تامین کننده...',
+            width: '100%'
+        });
+
+        // Select2 برای محصولات
+        $('.asg-select2-product').select2({
+            ajax: {
+                url: ajaxurl,
+                dataType: 'json',
+                delay: 250,
+                data: function(params) {
+                    return {
+                        action: 'asg_search_products',
+                        search: params.term
+                    };
+                },
+                processResults: function(data) {
+                    return { results: data };
+                }
+            },
+            minimumInputLength: 2,
+            placeholder: 'جستجوی محصول...',
+            width: '100%'
+        });
+
+        // اضافه کردن عملکرد پرینت
+        $('.print-preview').click(function(e) {
+            e.preventDefault();
+            window.print();
+        });
+
+        // نمایش لودینگ هنگام دانلود اکسل
+        $('a[href*="export=excel"]').click(function() {
+            $(this).addClass('updating-message').text('در حال آماده‌سازی فایل...');
+        });
     });
+    </script>
+    <?php
 }
 function asg_charts_page() {
     global $wpdb;
