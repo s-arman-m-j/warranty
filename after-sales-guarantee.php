@@ -40,14 +40,17 @@ require_once ASG_PLUGIN_DIR . 'includes/class-asg-notifications.php';
 require_once ASG_PLUGIN_DIR . 'includes/class-asg-api.php';
 require_once ASG_PLUGIN_DIR . 'includes/class-asg-reports.php';
 require_once ASG_PLUGIN_DIR . 'includes/class-asg-db.php';
+require_once ASG_PLUGIN_DIR . 'includes/class-asg-performance.php';
+require_once ASG_PLUGIN_DIR . 'includes/class-asg-assets-optimizer.php';
 
 // راه‌اندازی افزونه
 function asg_init() {
     $security = new ASG_Security();
-    // ASG_Public() را فعلاً حذف می‌کنیم
     ASG_Notifications::instance();
     ASG_API::instance();
     ASG_Reports::instance();
+    // اضافه کردن خط زیر به انتهای تابع
+    ASG_Assets_Optimizer::instance();
 }
 add_action('plugins_loaded', 'asg_init');
 
@@ -442,25 +445,119 @@ function asg_debug_page() {
         
         echo '</table>';
         echo '</div>';
-
+       
         // بخش منابع سیستم
-        echo '<div class="asg-debug-section">';
-        echo '<h2>استفاده از منابع سیستم</h2>';
-        echo '<table class="wp-list-table widefat fixed striped">';
+echo '<div class="asg-debug-section">';
+echo '<h2>استفاده از منابع سیستم</h2>';
+echo '<table class="wp-list-table widefat fixed striped">';
 
-        $memory_usage = round(memory_get_usage() / 1024 / 1024, 2) . ' MB';
-        $memory_peak_usage = round(memory_get_peak_usage() / 1024 / 1024, 2) . ' MB';
+// بهینه‌سازی محاسبه مصرف CPU
+$cpu_info = array(
+    'cores' => 1,
+    'load' => array(0, 0, 0)
+);
 
-        // محاسبه درصد استفاده از حافظه
-        $memory_limit = ini_get('memory_limit');
-        if (strpos($memory_limit, 'M') !== false) {
-            $memory_limit = intval($memory_limit) * 1024 * 1024;
-        } elseif (strpos($memory_limit, 'G') !== false) {
-            $memory_limit = intval($memory_limit) * 1024 * 1024 * 1024;
-        } else {
-            $memory_limit = intval($memory_limit);
-        }
-        $memory_usage_percent = round((memory_get_usage() / $memory_limit) * 100, 2) . '%';
+// از کش برای ذخیره اطلاعات CPU استفاده کنید
+$cached_cpu_info = wp_cache_get('asg_cpu_info');
+if (false === $cached_cpu_info) {
+    if (is_readable('/proc/cpuinfo')) {
+        $cpuinfo = file_get_contents('/proc/cpuinfo');
+        preg_match_all('/^processor/m', $cpuinfo, $matches);
+        $cpu_info['cores'] = count($matches[0]);
+    } elseif (stripos(PHP_OS, 'win') === false) {
+        $cpu_info['cores'] = (int) trim(shell_exec("nproc"));
+    }
+    
+    $cpu_info['load'] = sys_getloadavg();
+    wp_cache_set('asg_cpu_info', $cpu_info, '', 60); // کش برای 60 ثانیه
+    
+    $cached_cpu_info = $cpu_info;
+}
+
+// محاسبه درصد استفاده از CPU با استفاده از مقادیر کش شده
+$cpu_usage_percent_1m = round(($cached_cpu_info['load'][0] / $cached_cpu_info['cores']) * 100, 2);
+$cpu_usage_percent_5m = round(($cached_cpu_info['load'][1] / $cached_cpu_info['cores']) * 100, 2);
+$cpu_usage_percent_15m = round(($cached_cpu_info['load'][2] / $cached_cpu_info['cores']) * 100, 2);
+
+// محاسبه استفاده از حافظه
+$memory_usage = round(memory_get_usage() / 1024 / 1024, 2);
+$memory_peak_usage = round(memory_get_peak_usage() / 1024 / 1024, 2);
+
+// اضافه کردن کلاس‌های CSS برای رنگ‌بندی درصدها
+function get_usage_class($percent) {
+    if ($percent < 50) return 'usage-normal';
+    if ($percent < 80) return 'usage-warning';
+    return 'usage-critical';
+}
+
+// استایل‌های CSS برای نمایش بهتر
+echo '<style>
+    .usage-normal { color: #00a32a; font-weight: bold; }
+    .usage-warning { color: #dba617; font-weight: bold; }
+    .usage-critical { color: #d63638; font-weight: bold; }
+    .resource-value { 
+        font-family: monospace;
+        background: #f0f0f1;
+        padding: 2px 6px;
+        border-radius: 3px;
+        margin-right: 5px;
+    }
+    .resource-percent {
+        display: inline-block;
+        min-width: 60px;
+        text-align: right;
+    }
+</style>';
+
+// نمایش اطلاعات با فرمت جدید
+echo '<tr>
+        <td>استفاده از حافظه فعلی:</td>
+        <td>
+            <span class="resource-value">' . $memory_usage . ' MB</span>
+        </td>
+    </tr>';
+echo '<tr>
+        <td>بیشترین استفاده از حافظه:</td>
+        <td>
+            <span class="resource-value">' . $memory_peak_usage . ' MB</span>
+        </td>
+    </tr>';
+echo '<tr>
+        <td>بار پردازنده (1 دقیقه):</td>
+        <td>
+            <span class="resource-value">' . $cached_cpu_info['load'][0] . '</span>
+            <span class="' . get_usage_class($cpu_usage_percent_1m) . ' resource-percent">
+                ' . $cpu_usage_percent_1m . '%
+            </span>
+        </td>
+    </tr>';
+echo '<tr>
+        <td>بار پردازنده (5 دقیقه):</td>
+        <td>
+            <span class="resource-value">' . $cached_cpu_info['load'][1] . '</span>
+            <span class="' . get_usage_class($cpu_usage_percent_5m) . ' resource-percent">
+                ' . $cpu_usage_percent_5m . '%
+            </span>
+        </td>
+    </tr>';
+echo '<tr>
+        <td>بار پردازنده (15 دقیقه):</td>
+        <td>
+            <span class="resource-value">' . $cached_cpu_info['load'][2] . '</span>
+            <span class="' . get_usage_class($cpu_usage_percent_15m) . ' resource-percent">
+                ' . $cpu_usage_percent_15m . '%
+            </span>
+        </td>
+    </tr>';
+echo '<tr>
+        <td>تعداد هسته‌های CPU:</td>
+        <td>
+            <span class="resource-value">' . $cached_cpu_info['cores'] . '</span>
+        </td>
+    </tr>';
+
+echo '</table>';
+echo '</div>';   
 
         // محاسبه تعداد هسته‌های CPU
         $cpu_cores = 1;

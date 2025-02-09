@@ -144,12 +144,21 @@ class ASG_Security {
         return true;
     }
 
-    /**
-     * تولید توکن امن
-     */
-    public static function generate_token($length = 32) {
-        return bin2hex(random_bytes($length));
+   /**
+ * تولید توکن امن با استفاده از کش
+ */
+public static function generate_token($length = 32) {
+    $cache_key = 'asg_security_token_' . $length;
+    $token = wp_cache_get($cache_key);
+    
+    if (false === $token) {
+        $token = bin2hex(random_bytes($length));
+        wp_cache_set($cache_key, $token, '', 3600); // کش برای یک ساعت
     }
+    
+    return $token;
+}
+
 
     /**
      * رمزنگاری داده
@@ -183,23 +192,24 @@ class ASG_Security {
     }
 
     /**
-     * محدودسازی درخواست‌ها
-     */
-    public static function rate_limit($key, $limit = 60, $period = 3600) {
-        $current = get_transient('asg_rate_' . $key);
-        
-        if (false === $current) {
-            set_transient('asg_rate_' . $key, 1, $period);
-            return true;
-        }
-        
-        if ($current >= $limit) {
-            return false;
-        }
-        
-        set_transient('asg_rate_' . $key, $current + 1, $period);
+ * محدودسازی درخواست‌ها با استفاده از کش object
+ */
+public static function rate_limit($key, $limit = 60, $period = 3600) {
+    $cache_key = 'asg_rate_' . $key;
+    $current = wp_cache_get($cache_key);
+    
+    if (false === $current) {
+        wp_cache_add($cache_key, 1, '', $period);
         return true;
     }
+    
+    if ($current >= $limit) {
+        return false;
+    }
+    
+    wp_cache_incr($cache_key);
+    return true;
+}
 }
 
 // نمونه استفاده در فرم‌ها
