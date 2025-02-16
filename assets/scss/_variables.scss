@@ -1,0 +1,37 @@
+// رنگ‌های اصلی
+$primary-color: #2271b1;
+$secondary-color: #00a32a;
+$warning-color: #dba617;
+$danger-color: #d63638;
+$success-color: #46b450;
+
+// رنگ‌های متن
+$text-primary: #1d2327;
+$text-secondary: #50575e;
+$text-light: #f0f0f1;
+
+// سایز‌های فونت
+$font-size-base: 14px;
+$font-size-small: 12px;
+$font-size-large: 16px;
+$font-size-xlarge: 18px;
+
+// فاصله‌ها
+$spacing-unit: 8px;
+$spacing-small: $spacing-unit;
+$spacing-medium: $spacing-unit * 2;
+$spacing-large: $spacing-unit * 3;
+
+// سایه‌ها
+$box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+$box-shadow-hover: 0 4px 8px rgba(0, 0, 0, 0.15);
+
+// انیمیشن‌ها
+$transition-duration: 0.3s;
+$transition-timing: ease-in-out;
+
+// نقاط شکست
+$breakpoint-sm: 576px;
+$breakpoint-md: 768px;
+$breakpoint-lg: 992px;
+$breakpoint-xl: 1200px;

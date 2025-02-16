@@ -1,0 +1,42 @@
+.asg-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: $spacing-medium 0;
+
+    th, td {
+        padding: $spacing-small;
+        text-align: right;
+        border-bottom: 1px solid #ddd;
+    }
+
+    th {
+        background-color: #f8f9fa;
+        font-weight: 500;
+        color: $text-secondary;
+    }
+
+    tr {
+        @include transition(background-color);
+
+        &:hover {
+            background-color: #f8f9fa;
+        }
+    }
+
+    &-actions {
+        @include flex(row, flex-start, center);
+        gap: $spacing-small;
+    }
+
+    &-status {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: $font-size-small;
+        font-weight: 500;
+
+        &--pending { background-color: lighten($warning-color, 35%); }
+        &--approved { background-color: lighten($success-color, 45%); }
+        &--rejected { background-color: lighten($danger-color, 35%); }
+    }
+}

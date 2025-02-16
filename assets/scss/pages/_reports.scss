@@ -1,0 +1,40 @@
+.asg-reports {
+    &-container {
+        @include grid(1, $spacing-large);
+        margin: $spacing-large 0;
+
+        @include responsive(lg) {
+            @include grid(2, $spacing-large);
+        }
+    }
+
+    &-card {
+        background-color: #fff;
+        padding: $spacing-medium;
+        border-radius: 4px;
+        @include box-shadow;
+
+        &.full-width {
+            grid-column: 1 / -1;
+        }
+    }
+
+    &-filters {
+        @include grid(1, $spacing-medium);
+        margin-bottom: $spacing-large;
+
+        @include responsive(md) {
+            @include grid(3, $spacing-medium);
+        }
+
+        .filter-group {
+            @include flex(column);
+            gap: $spacing-small;
+        }
+    }
+
+    &-chart {
+        height: 300px;
+        margin: $spacing-medium 0;
+    }
+}

@@ -1,29 +1,25 @@
-// assets/scss/main.scss
+// متغیرها و تنظیمات
 @import 'variables';
 @import 'mixins';
-@import 'components/warranty-form';
+
+// استایل‌های پایه
+@import 'base/reset';
+@import 'base/typography';
+@import 'base/utilities';
+
+// کامپوننت‌ها
+@import 'components/buttons';
+@import 'components/forms';
+@import 'components/tables';
 @import 'components/notifications';
-@import 'utilities';
+@import 'components/charts';
+@import 'components/modals';
 
-// بهینه‌سازی‌های کلی
-html {
-    font-display: optional;
-}
+// صفحات و بخش‌ها
+@import 'pages/warranty-form';
+@import 'pages/reports';
+@import 'pages/settings';
 
-img {
-    loading: lazy;
-}
-
-// استفاده از CSS Container Queries
-.warranty-container {
-    container-type: inline-size;
-    container-name: warranty;
-}
-
-@container warranty (min-width: 768px) {
-    .warranty-form {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 20px;
-    }
-}
+// حالت‌های مختلف (تم تاریک، RTL و...)
+@import 'themes/dark';
+@import 'themes/rtl';

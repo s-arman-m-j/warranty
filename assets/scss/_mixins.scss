@@ -1,0 +1,43 @@
+// میکسین فلکس
+@mixin flex($direction: row, $justify: flex-start, $align: stretch) {
+    display: flex;
+    flex-direction: $direction;
+    justify-content: $justify;
+    align-items: $align;
+}
+
+// میکسین گرید
+@mixin grid($columns: 1, $gap: $spacing-medium) {
+    display: grid;
+    grid-template-columns: repeat($columns, 1fr);
+    gap: $gap;
+}
+
+// میکسین رسپانسیو
+@mixin responsive($breakpoint) {
+    @if $breakpoint == sm {
+        @media (min-width: $breakpoint-sm) { @content; }
+    } @else if $breakpoint == md {
+        @media (min-width: $breakpoint-md) { @content; }
+    } @else if $breakpoint == lg {
+        @media (min-width: $breakpoint-lg) { @content; }
+    } @else if $breakpoint == xl {
+        @media (min-width: $breakpoint-xl) { @content; }
+    }
+}
+
+// میکسین سایه
+@mixin box-shadow($type: default) {
+    @if $type == default {
+        box-shadow: $box-shadow;
+    } @else if $type == hover {
+        box-shadow: $box-shadow-hover;
+    }
+}
+
+// میکسین انیمیشن
+@mixin transition($properties...) {
+    transition-property: $properties;
+    transition-duration: $transition-duration;
+    transition-timing-function: $transition-timing;
+}

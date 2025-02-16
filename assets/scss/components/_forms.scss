@@ -1,0 +1,85 @@
+.asg-form {
+    &-container {
+        @include grid(1, $spacing-medium);
+        padding: $spacing-medium;
+        background-color: #fff;
+        border-radius: 4px;
+        @include box-shadow;
+
+        @include responsive(md) {
+            @include grid(2, $spacing-medium);
+        }
+    }
+
+    &-group {
+        margin-bottom: $spacing-medium;
+    }
+
+    &-label {
+        display: block;
+        margin-bottom: $spacing-small;
+        color: $text-secondary;
+        font-weight: 500;
+    }
+
+    &-input,
+    &-select,
+    &-textarea {
+        width: 100%;
+        padding: $spacing-small;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        @include transition(border-color);
+
+        &:focus {
+            border-color: $primary-color;
+            outline: none;
+        }
+
+        &.error {
+            border-color: $danger-color;
+        }
+    }
+
+    &-textarea {
+        min-height: 100px;
+        resize: vertical;
+    }
+
+    &-upload {
+        &-wrapper {
+            @include flex(column);
+            gap: $spacing-small;
+        }
+
+        &-preview {
+            max-width: 200px;
+            img {
+                width: 100%;
+                height: auto;
+                border-radius: 4px;
+            }
+        }
+    }
+}
+
+// استایل Select2
+.select2-container {
+    .select2-selection {
+        height: auto;
+        padding: $spacing-small;
+        border-color: #ddd;
+        
+        &:focus {
+            border-color: $primary-color;
+        }
+    }
+
+    .select2-results__option {
+        padding: $spacing-small;
+
+        &--highlighted {
+            background-color: $primary-color;
+        }
+    }
+}

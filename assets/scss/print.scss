@@ -1,0 +1,58 @@
+@media print {
+    // حذف المان‌های غیرضروری در نسخه چاپی
+    .no-print,
+    .asg-filters,
+    .asg-actions,
+    #adminmenumain,
+    #wpadminbar,
+    #wpfooter {
+        display: none !important;
+    }
+
+    // تنظیمات کلی چاپ
+    body {
+        background: white;
+        font-size: 12pt;
+        color: black;
+    }
+
+    // تنظیمات جداول
+    .asg-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20pt 0;
+
+        th, td {
+            border: 1pt solid #000;
+            padding: 5pt;
+            text-align: right;
+        }
+
+        th {
+            background-color: #f0f0f0 !important;
+            -webkit-print-color-adjust: exact;
+        }
+    }
+
+    // تنظیمات صفحه‌بندی
+    @page {
+        margin: 2cm;
+    }
+
+    // جلوگیری از شکستن المان‌ها
+    .asg-warranty-item,
+    .asg-report-card {
+        break-inside: avoid;
+    }
+
+    // بهینه‌سازی لینک‌ها
+    a {
+        text-decoration: none;
+        color: black;
+
+        &[href]:after {
+            content: " (" attr(href) ")";
+            font-size: 10pt;
+        }
+    }
+}
