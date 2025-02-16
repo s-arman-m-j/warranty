@@ -16,24 +16,29 @@ define('ASG_VERSION', '1.8');
 define('ASG_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('ASG_PLUGIN_URL', plugin_dir_url(__FILE__));
 
-// اتولود کلاس‌ها
-spl_autoload_register(function ($class) {
+/**
+ * Autoloader برای لود خودکار کلاس‌ها
+ */
+spl_autoload_register(function($class) {
+    // پیشوند کلاس‌های افزونه
     $prefix = 'ASG_';
-    $base_dir = ASG_PLUGIN_DIR . 'includes/';
-
-    $len = strlen($prefix);
-    if (strncmp($prefix, $class, $len) !== 0) {
+    
+    // اگر کلاس با پیشوند ما شروع نمی‌شود، آن را نادیده بگیر
+    if (strpos($class, $prefix) !== 0) {
         return;
     }
-
-    $relative_class = substr($class, $len);
-    $file = $base_dir . 'class-' . strtolower(str_replace('_', '-', $relative_class)) . '.php';
-
-    if (file_exists($file)) {
-        require $file;
+    
+    // حذف پیشوند برای پیدا کردن مسیر فایل
+    $class_file = str_replace($prefix, '', $class);
+    // تبدیل نام کلاس به مسیر فایل
+    $class_path = plugin_dir_path(__FILE__) . 'includes/class-asg-' . 
+                  strtolower($class_file) . '.php';
+    
+    // اگر فایل وجود دارد، آن را لود کن
+    if (file_exists($class_path)) {
+        require_once $class_path;
     }
 });
-
 // فراخوانی فایل‌های اصلی
 require_once ASG_PLUGIN_DIR . 'includes/class-asg-security.php';
 require_once ASG_PLUGIN_DIR . 'includes/class-asg-notifications.php';
@@ -1366,51 +1371,90 @@ function asg_show_requests_table() {
 }
 
 // انتقال اسکریپت‌ها و استایل‌ها
+// این تابع رو پیدا کنید یا اگر نیست اضافه کنید
 function asg_enqueue_scripts() {
-    // بارگذاری کتابخانه رسانه وردپرس
-    wp_enqueue_media();
+    // تعریف نسخه برای cache busting
+    $version = defined('WP_DEBUG') && WP_DEBUG ? time() : ASG_VERSION;
 
-    // بارگذاری اسکریپت سفارشی
-    wp_enqueue_script(
-        'asg-script',
-        plugins_url('asg-script.js', __FILE__),
-        array('jquery'),
-        filemtime(plugin_dir_path(__FILE__) . 'asg-script.js'),
-        true
+    // لود کردن استایل‌های اصلی
+    wp_enqueue_style(
+        'asg-main-styles',
+        plugins_url('assets/css/main.min.css', __FILE__),
+        array(),
+        $version
     );
 
-    // بارگذاری Select2 CSS از CDN
+    // استایل‌های RTL
+    if (is_rtl()) {
+        wp_enqueue_style(
+            'asg-rtl-styles',
+            plugins_url('assets/css/rtl.min.css', __FILE__),
+            array('asg-main-styles'),
+            $version
+        );
+    }
+
+    // استایل‌های Admin
+    if (is_admin()) {
+        wp_enqueue_style(
+            'asg-admin-styles',
+            plugins_url('assets/css/admin.min.css', __FILE__),
+            array('asg-main-styles'),
+            $version
+        );
+    }
+
+    // لود کردن Select2
     wp_enqueue_style(
         'select2',
-        'https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css',
+        'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css',
         array(),
-        '4.0.13'
+        '4.1.0-rc.0'
     );
 
-    // بارگذاری Select2 JS از CDN
-    wp_enqueue_script(
-        'select2',
-        'https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js',
-        array('jquery'),
-        '4.0.13',
-        true
-    );
+    // استایل سفارشی Select2 برای RTL
+    if (is_rtl()) {
+        wp_enqueue_style(
+            'select2-rtl',
+            plugins_url('assets/css/select2-rtl.min.css', __FILE__),
+            array('select2'),
+            $version
+        );
+    }
 
-    // بارگذاری فایل CSS سفارشی
+    // لود کردن Chart.js
+    if (isset($_GET['page']) && strpos($_GET['page'], 'warranty-management') !== false) {
+        wp_enqueue_style(
+            'chartjs',
+            'https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.css',
+            array(),
+            '3.9.1'
+        );
+    }
+
+    // استایل‌های Print
     wp_enqueue_style(
-        'asg-custom-style',
-        plugins_url('asg-custom-style.css', __FILE__),
+        'asg-print-styles',
+        plugins_url('assets/css/print.min.css', __FILE__),
         array(),
-        filemtime(plugin_dir_path(__FILE__) . 'asg-custom-style.css')
+        $version,
+        'print'
     );
 
-    // افزودن داده‌های لازم برای اسکریپت (اختیاری)
-    wp_localize_script('asg-script', 'asg_params', array(
-        'ajaxurl' => admin_url('admin-ajax.php'),
-        'nonce' => wp_create_nonce('asg-nonce')
-    ));
+    // تعریف متغیرهای CSS سفارشی
+    $custom_css = "
+        :root {
+            --asg-primary-color: {$primary_color};
+            --asg-secondary-color: {$secondary_color};
+            --asg-warning-color: {$warning_color};
+            --asg-danger-color: {$danger_color};
+            --asg-success-color: {$success_color};
+        }
+    ";
+    wp_add_inline_style('asg-main-styles', $custom_css);
 }
 add_action('admin_enqueue_scripts', 'asg_enqueue_scripts');
+add_action('wp_enqueue_scripts', 'asg_enqueue_scripts');
 
 // اکشن Ajax برای جستجوی محصولات
 add_action('wp_ajax_asg_search_products', 'asg_search_products');
