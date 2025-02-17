@@ -49,13 +49,34 @@ require_once ASG_PLUGIN_DIR . 'includes/class-asg-performance.php';
 require_once ASG_PLUGIN_DIR . 'includes/class-asg-assets-optimizer.php';
 
 // راه‌اندازی افزونه
+// راه‌اندازی افزونه
 function asg_init() {
-    $security = new ASG_Security();
-    ASG_Notifications::instance();
-    ASG_API::instance();
-    ASG_Reports::instance();
-    // اضافه کردن خط زیر به انتهای تابع
-    ASG_Assets_Optimizer::instance();
+    try {
+        // لود ترجمه
+        load_plugin_textdomain('after-sales-guarantee', false, dirname(plugin_basename(__FILE__)) . '/languages');
+
+        // ایجاد نمونه از کلاس‌های اصلی با namespace جدید
+        $security = new ASG\Security();
+        $notifications = new ASG\Notifications();
+        $api = new ASG\API();
+        $reports = new ASG\Reports();
+        $assets = new ASG\Assets_Optimizer();
+        
+        do_action('asg_loaded');
+    } catch (Exception $e) {
+        error_log('ASG Plugin Error: ' . $e->getMessage());
+        
+        // نمایش پیام خطا به ادمین
+        if (is_admin()) {
+            add_action('admin_notices', function() use ($e) {
+                ?>
+                <div class="notice notice-error">
+                    <p><?php echo esc_html('خطا در راه‌اندازی افزونه گارانتی: ' . $e->getMessage()); ?></p>
+                </div>
+                <?php
+            });
+        }
+    }
 }
 add_action('plugins_loaded', 'asg_init');
 
