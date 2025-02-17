@@ -20,19 +20,21 @@ define('ASG_PLUGIN_URL', plugin_dir_url(__FILE__));
  * Autoloader برای لود خودکار کلاس‌ها
  */
 spl_autoload_register(function($class) {
-    // پیشوند کلاس‌های افزونه
-    $prefix = 'ASG_';
+    // پیشوند namespace افزونه
+    $prefix = 'ASG\\';
     
-    // اگر کلاس با پیشوند ما شروع نمی‌شود، آن را نادیده بگیر
-    if (strpos($class, $prefix) !== 0) {
+    // اگر کلاس با namespace ما شروع نمی‌شود، آن را نادیده بگیر
+    $len = strlen($prefix);
+    if (strncmp($prefix, $class, $len) !== 0) {
         return;
     }
     
-    // حذف پیشوند برای پیدا کردن مسیر فایل
-    $class_file = str_replace($prefix, '', $class);
+    // حذف namespace برای پیدا کردن مسیر فایل
+    $relative_class = substr($class, $len);
+    
     // تبدیل نام کلاس به مسیر فایل
     $class_path = plugin_dir_path(__FILE__) . 'includes/class-asg-' . 
-                  strtolower($class_file) . '.php';
+                 strtolower(str_replace('_', '-', $relative_class)) . '.php';
     
     // اگر فایل وجود دارد، آن را لود کن
     if (file_exists($class_path)) {
@@ -2636,7 +2638,7 @@ function asg_help_page_callback() {
     echo '</div>';
 }
 register_activation_hook(__FILE__, function() {
-    $db = new ASG_DB();
+    $db = new ASG\DB();
     $db->create_tables();
 });
 ?>
