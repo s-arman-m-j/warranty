@@ -8,7 +8,7 @@ Author: Your Name
 
 // جلوگیری از دسترسی مستقیم
 if (!defined('ABSPATH')) {
-    exit('دسترسی مستقیم غیرمجاز است!');
+    exit;
 }
 
 // تعریف ثابت‌های افزونه
@@ -16,45 +16,49 @@ define('ASG_VERSION', '1.8');
 define('ASG_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('ASG_PLUGIN_URL', plugin_dir_url(__FILE__));
 
-// فراخوانی فایل‌های اصلی 
-foreach (glob(ASG_PLUGIN_DIR . 'includes/class-asg-*.php') as $file) {
-    require_once $file;
-}
-
 /**
- * راه‌اندازی افزونه
+ * Autoloader برای لود خودکار کلاس‌ها
  */
-function asg_init() {
-    try {
-        // لود ترجمه
-        load_plugin_textdomain('after-sales-guarantee', false, dirname(plugin_basename(__FILE__)) . '/languages');
-
-        // ایجاد نمونه از کلاس‌های اصلی
-        $security = new ASG\Security();
-        $notifications = new ASG\Notifications();
-        $api = new ASG\API();
-        $reports = new ASG\Reports();
-        $assets = new ASG\Assets_Optimizer();
-        
-        do_action('asg_loaded');
-
-    } catch (Exception $e) {
-        error_log('ASG Plugin Error: ' . $e->getMessage());
-        
-        if (is_admin()) {
-            add_action('admin_notices', function() use ($e) {
-                ?>
-                <div class="notice notice-error">
-                    <p><?php echo esc_html('خطا در راه‌اندازی افزونه گارانتی: ' . $e->getMessage()); ?></p>
-                </div>
-                <?php
-            });
-        }
+spl_autoload_register(function($class) {
+    // پیشوند کلاس‌های افزونه
+    $prefix = 'ASG_';
+    
+    // اگر کلاس با پیشوند ما شروع نمی‌شود، آن را نادیده بگیر
+    if (strpos($class, $prefix) !== 0) {
+        return;
     }
-}
+    
+    // حذف پیشوند برای پیدا کردن مسیر فایل
+    $class_file = str_replace($prefix, '', $class);
+    // تبدیل نام کلاس به مسیر فایل
+    $class_path = plugin_dir_path(__FILE__) . 'includes/class-asg-' . 
+                  strtolower($class_file) . '.php';
+    
+    // اگر فایل وجود دارد، آن را لود کن
+    if (file_exists($class_path)) {
+        require_once $class_path;
+    }
+});
+// فراخوانی فایل‌های اصلی
+require_once ASG_PLUGIN_DIR . 'includes/class-asg-security.php';
+require_once ASG_PLUGIN_DIR . 'includes/class-asg-notifications.php';
+require_once ASG_PLUGIN_DIR . 'includes/class-asg-api.php';
+require_once ASG_PLUGIN_DIR . 'includes/class-asg-reports.php';
+require_once ASG_PLUGIN_DIR . 'includes/class-asg-db.php';
+require_once ASG_PLUGIN_DIR . 'includes/class-asg-performance.php';
+require_once ASG_PLUGIN_DIR . 'includes/class-asg-assets-optimizer.php';
 
-// راه‌اندازی افزونه بعد از لود شدن همه پلاگین‌ها
+// راه‌اندازی افزونه
+function asg_init() {
+    $security = new ASG_Security();
+    ASG_Notifications::instance();
+    ASG_API::instance();
+    ASG_Reports::instance();
+    // اضافه کردن خط زیر به انتهای تابع
+    ASG_Assets_Optimizer::instance();
+}
 add_action('plugins_loaded', 'asg_init');
+
 
 // فعال‌سازی افزونه و ایجاد جدول‌های دیتابیس
 register_activation_hook(__FILE__, 'asg_create_tables');
@@ -110,7 +114,7 @@ function asg_create_tables() {
 
 // افزودن منو به پیشخوان وردپرس
 add_action('admin_menu', 'asg_admin_menu');
-
+// افزودن منو به پیشخوان وردپرس
 function asg_admin_menu() {
     // افزودن منوی اصلی
     add_menu_page(
@@ -124,14 +128,13 @@ function asg_admin_menu() {
     );
 
     // افزودن زیرمنو برای دیباگ
-    add_submenu_page(
-        'warranty-management',
-        'دیباگ',
-        'دیباگ',
-        'manage_options',
-        'warranty-management-debug',
-        'asg_debug_page'
-    );
+add_submenu_page(
+    'warranty-management',
+    'دیباگ',
+    'manage_options',
+    'warranty-management-debug', // تغییر اسلاگ
+    'asg_debug_page'
+);
 
     // افزودن زیرمنو برای ثبت گارانتی جدید
     add_submenu_page(
@@ -159,7 +162,7 @@ function asg_admin_menu() {
         'گزارشات',
         'گزارشات',
         'manage_options',
-        'warranty-management-reports',
+        'warranty-management-reports', // تغییر اسلاگ
         'asg_reports_main_page'
     );
 
@@ -169,7 +172,7 @@ function asg_admin_menu() {
         'نمودارها',
         'نمودارها',
         'manage_options',
-        'warranty-management-charts',
+        'warranty-management-charts', // تغییر اسلاگ
         'asg_charts_page'
     );
 
@@ -183,6 +186,16 @@ function asg_admin_menu() {
         'asg_status_settings_page'
     );
 
+    // افزودن زیرمنو برای دیباگ
+    add_submenu_page(
+        'warranty-management',
+        'دیباگ',
+        'دیباگ',
+        'manage_options',
+        'warranty-management-debug', // تغییر اسلاگ
+        'asg_debug_page'
+    );
+
     // افزودن صفحه مخفی برای ویرایش
     add_submenu_page(
         null,
@@ -194,17 +207,6 @@ function asg_admin_menu() {
     );
 }
 
-// صفحه مدیریت درخواست‌ها
-function asg_admin_page() {
-    global $wpdb;
-
-    echo '<div class="wrap">';
-    echo '<h1>مدیریت گارانتی</h1>';
-    echo '<a href="' . admin_url('admin.php?page=warranty-management-add') . '" class="button button-primary">ثبت گارانتی جدید</a>';
-    echo '<h2>لیست درخواست‌های گارانتی</h2>';
-    asg_show_requests_table();
-    echo '</div>';
-}
 // صفحه دیباگ (اضافه شده)
 // تابع دیباگ
 function asg_debug_page() {
@@ -1369,90 +1371,51 @@ function asg_show_requests_table() {
 }
 
 // انتقال اسکریپت‌ها و استایل‌ها
-// این تابع رو پیدا کنید یا اگر نیست اضافه کنید
 function asg_enqueue_scripts() {
-    // تعریف نسخه برای cache busting
-    $version = defined('WP_DEBUG') && WP_DEBUG ? time() : ASG_VERSION;
+    // بارگذاری کتابخانه رسانه وردپرس
+    wp_enqueue_media();
 
-    // لود کردن استایل‌های اصلی
-    wp_enqueue_style(
-        'asg-main-styles',
-        plugins_url('assets/css/main.min.css', __FILE__),
-        array(),
-        $version
+    // بارگذاری اسکریپت سفارشی
+    wp_enqueue_script(
+        'asg-script',
+        plugins_url('asg-script.js', __FILE__),
+        array('jquery'),
+        filemtime(plugin_dir_path(__FILE__) . 'asg-script.js'),
+        true
     );
 
-    // استایل‌های RTL
-    if (is_rtl()) {
-        wp_enqueue_style(
-            'asg-rtl-styles',
-            plugins_url('assets/css/rtl.min.css', __FILE__),
-            array('asg-main-styles'),
-            $version
-        );
-    }
-
-    // استایل‌های Admin
-    if (is_admin()) {
-        wp_enqueue_style(
-            'asg-admin-styles',
-            plugins_url('assets/css/admin.min.css', __FILE__),
-            array('asg-main-styles'),
-            $version
-        );
-    }
-
-    // لود کردن Select2
+    // بارگذاری Select2 CSS از CDN
     wp_enqueue_style(
         'select2',
-        'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css',
+        'https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css',
         array(),
-        '4.1.0-rc.0'
+        '4.0.13'
     );
 
-    // استایل سفارشی Select2 برای RTL
-    if (is_rtl()) {
-        wp_enqueue_style(
-            'select2-rtl',
-            plugins_url('assets/css/select2-rtl.min.css', __FILE__),
-            array('select2'),
-            $version
-        );
-    }
+    // بارگذاری Select2 JS از CDN
+    wp_enqueue_script(
+        'select2',
+        'https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js',
+        array('jquery'),
+        '4.0.13',
+        true
+    );
 
-    // لود کردن Chart.js
-    if (isset($_GET['page']) && strpos($_GET['page'], 'warranty-management') !== false) {
-        wp_enqueue_style(
-            'chartjs',
-            'https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.css',
-            array(),
-            '3.9.1'
-        );
-    }
-
-    // استایل‌های Print
+    // بارگذاری فایل CSS سفارشی
     wp_enqueue_style(
-        'asg-print-styles',
-        plugins_url('assets/css/print.min.css', __FILE__),
+        'asg-custom-style',
+        plugins_url('asg-custom-style.css', __FILE__),
         array(),
-        $version,
-        'print'
+        filemtime(plugin_dir_path(__FILE__) . 'asg-custom-style.css')
     );
 
-    // تعریف متغیرهای CSS سفارشی
-    $custom_css = "
-        :root {
-            --asg-primary-color: {$primary_color};
-            --asg-secondary-color: {$secondary_color};
-            --asg-warning-color: {$warning_color};
-            --asg-danger-color: {$danger_color};
-            --asg-success-color: {$success_color};
-        }
-    ";
-    wp_add_inline_style('asg-main-styles', $custom_css);
+    // افزودن داده‌های لازم برای اسکریپت (اختیاری)
+    wp_localize_script('asg-script', 'asg_params', array(
+        'ajaxurl' => admin_url('admin-ajax.php'),
+        'nonce' => wp_create_nonce('asg-nonce')
+    ));
 }
 add_action('admin_enqueue_scripts', 'asg_enqueue_scripts');
-add_action('wp_enqueue_scripts', 'asg_enqueue_scripts');
 
 // اکشن Ajax برای جستجوی محصولات
 add_action('wp_ajax_asg_search_products', 'asg_search_products');
@@ -2613,7 +2576,7 @@ function asg_help_page_callback() {
     echo '</div>';
 }
 register_activation_hook(__FILE__, function() {
-    $db = new ASG\DB();
+    $db = new ASG_DB();
     $db->create_tables();
 });
 ?>
