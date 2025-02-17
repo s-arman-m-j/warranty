@@ -1,209 +1,210 @@
 <?php
-/**
- * کلاس بهینه‌سازی فایل‌های استاتیک
- */
-class ASG_Assets_Optimizer {
+namespace ASG;
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+class Assets_Optimizer {
     /**
-     * @var ASG_Assets_Optimizer نمونه منحصر به فرد از کلاس
+     * @var array لیست افزونه‌های کش شناخته شده
      */
-    private static $instance = null;
+    private const KNOWN_CACHE_PLUGINS = [
+        'wp-super-cache/wp-cache.php',
+        'w3-total-cache/w3-total-cache.php',
+        'wp-fastest-cache/wpFastestCache.php',
+        'litespeed-cache/litespeed-cache.php',
+        'wp-rocket/wp-rocket.php'
+    ];
 
     /**
-     * نسخه فایل‌های استاتیک
+     * @var array تنظیمات بهینه‌سازی تصاویر
      */
-    private $assets_version;
+    private const IMAGE_SETTINGS = [
+        'jpeg' => [
+            'quality' => 85,
+            'max_width' => 1920,
+            'max_height' => 1080
+        ],
+        'png' => [
+            'compression' => 9,
+            'max_width' => 1920,
+            'max_height' => 1080
+        ]
+    ];
 
-    /**
-     * سازنده کلاس
-     */
-    private function __construct() {
-        $this->assets_version = defined('WP_DEBUG') && WP_DEBUG ? time() : ASG_VERSION;
+    private $active_cache_plugin;
+
+    public function __construct() {
+        $this->detect_cache_plugin();
         $this->init_hooks();
     }
 
     /**
-     * دریافت نمونه منحصر به فرد از کلاس
+     * شناسایی افزونه کش فعال
      */
-    public static function instance() {
-        if (null === self::$instance) {
-            self::$instance = new self();
+    private function detect_cache_plugin(): void {
+        foreach (self::KNOWN_CACHE_PLUGINS as $plugin) {
+            if (is_plugin_active($plugin)) {
+                $this->active_cache_plugin = $plugin;
+                break;
+            }
         }
-        return self::$instance;
+    }
+
+    private function init_hooks(): void {
+        // اجرای هوک‌ها فقط اگر افزونه کش خاصی فعال نباشد
+        if (!$this->active_cache_plugin) {
+            add_action('wp_enqueue_scripts', [$this, 'optimize_assets'], 999);
+            add_filter('script_loader_tag', [$this, 'add_async_defer'], 10, 3);
+        }
+
+        // بهینه‌سازی تصاویر قبل از ذخیره
+        add_filter('wp_handle_upload', [$this, 'optimize_upload'], 10, 2);
+        
+        // پاکسازی header همیشه اجرا شود
+        add_action('init', [$this, 'cleanup_header']);
     }
 
     /**
-     * اضافه کردن هوک‌ها
+     * بهینه‌سازی تصویر آپلود شده
      */
-    private function init_hooks() {
-        // لود فایل‌ها در بخش عمومی
-        add_action('wp_enqueue_scripts', array($this, 'enqueue_frontend_assets'));
-        
-        // لود فایل‌ها در بخش مدیریت
-        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
-        
-        // اضافه کردن تنظیمات به هدر
-        add_action('wp_head', array($this, 'add_head_settings'));
-        
-        // بهینه‌سازی لود فایل‌ها
-        add_filter('script_loader_tag', array($this, 'add_async_defer_attributes'), 10, 2);
-    }
-
-/**
- * لود فایل‌های بخش عمومی
- */
-public function enqueue_frontend_assets() {
-    // فقط در صفحه فرم گارانتی یا صفحه پیگیری گارانتی
-    if ($this->is_warranty_page() || $this->is_guarantee_tracking_page()) {
-        // حذف فایل‌های غیر ضروری در صفحه پیگیری
-        if ($this->is_guarantee_tracking_page()) {
-            wp_dequeue_style('wp-block-library');
-            wp_dequeue_style('wc-blocks-style');
+    public function optimize_upload(array $upload): array {
+        // اگر افزونه‌های بهینه‌ساز تصویر فعال هستند، رد شود
+        if ($this->has_image_optimization_plugin()) {
+            return $upload;
         }
 
-        // فایل CSS بهینه شده
-        wp_enqueue_style(
-            'asg-optimized-styles',
-            ASG_PLUGIN_URL . 'assets/css/optimized.min.css',
-            array(),
-            $this->assets_version
-        );
+        if (strpos($upload['type'], 'image/') !== 0) {
+            return $upload;
+        }
 
-        // دیت پیکر فارسی
-        wp_enqueue_style(
-            'persian-datepicker',
-            ASG_PLUGIN_URL . 'assets/css/persian-datepicker.min.css',
-            array(),
-            $this->assets_version
-        );
-        
-        wp_enqueue_script(
-            'persian-date',
-            ASG_PLUGIN_URL . 'assets/js/persian-date.min.js',
-            array(),
-            $this->assets_version,
-            true
-        );
-        
-        wp_enqueue_script(
-            'persian-datepicker',
-            ASG_PLUGIN_URL . 'assets/js/persian-datepicker.min.js',
-            array('persian-date'),
-            $this->assets_version,
-            true
-        );
+        $file_path = $upload['file'];
+        $image_type = wp_check_filetype($file_path)['type'];
 
-        // فایل JavaScript بهینه شده
-        wp_enqueue_script(
-            'asg-optimized-scripts',
-            ASG_PLUGIN_URL . 'assets/js/dist/optimized.min.js',
-            array('jquery'),
-            $this->assets_version,
-            true
-        );
+        // بهینه‌سازی با حفظ فایل اصلی
+        $this->optimize_image($file_path, $image_type);
 
-        // اضافه کردن متغیرهای مورد نیاز به JavaScript
-        wp_localize_script('asg-optimized-scripts', 'asgConfig', array(
-            'ajaxUrl' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('asg-nonce'),
-            'isRTL' => is_rtl(),
-            'debugMode' => defined('WP_DEBUG') && WP_DEBUG,
-            'currentUser' => 's-arman-m-j', // نام کاربری فعلی
-            'currentTime' => '2025-02-09 08:21:00', // زمان فعلی
-            'messages' => array(
-                'error' => __('خطایی رخ داده است', 'warranty'),
-                'success' => __('عملیات با موفقیت انجام شد', 'warranty'),
-                'loading' => __('لطفا صبر کنید...', 'warranty')
-            )
-        ));
+        return $upload;
     }
-}
 
     /**
-     * لود فایل‌های بخش مدیریت
+     * بررسی وجود افزونه بهینه‌ساز تصویر
      */
-    public function enqueue_admin_assets($hook) {
-        // لود فقط در صفحات مربوط به افزونه
-        if (strpos($hook, 'warranty-management') === false) {
+    private function has_image_optimization_plugin(): bool {
+        $optimization_plugins = [
+            'imagify/imagify.php',
+            'wp-smushit/wp-smush.php',
+            'ewww-image-optimizer/ewww-image-optimizer.php',
+            'shortpixel-image-optimiser/wp-shortpixel.php'
+        ];
+
+        foreach ($optimization_plugins as $plugin) {
+            if (is_plugin_active($plugin)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * بهینه‌سازی تصویر با حفظ نسخه اصلی
+     */
+    private function optimize_image(string $file_path, string $mime_type): bool {
+        if (!function_exists('imagecreatefromjpeg')) {
+            return false;
+        }
+
+        $type = str_replace('image/', '', $mime_type);
+        $settings = self::IMAGE_SETTINGS[$type] ?? null;
+
+        if (!$settings) {
+            return false;
+        }
+
+        // ایجاد نسخه بهینه در کنار فایل اصلی
+        $optimized_path = $this->get_optimized_path($file_path);
+
+        try {
+            copy($file_path, $optimized_path);
+
+            switch ($mime_type) {
+                case 'image/jpeg':
+                    $image = imagecreatefromjpeg($optimized_path);
+                    $this->resize_image($image, $settings);
+                    imagejpeg($image, $optimized_path, $settings['quality']);
+                    break;
+
+                case 'image/png':
+                    $image = imagecreatefrompng($optimized_path);
+                    imagealphablending($image, false);
+                    imagesavealpha($image, true);
+                    $this->resize_image($image, $settings);
+                    imagepng($image, $optimized_path, $settings['compression']);
+                    break;
+            }
+
+            if (isset($image)) {
+                imagedestroy($image);
+            }
+
+            return true;
+        } catch (\Exception $e) {
+            error_log('ASG Image Optimization Error: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * مسیر فایل بهینه شده
+     */
+    private function get_optimized_path(string $original_path): string {
+        $info = pathinfo($original_path);
+        return $info['dirname'] . '/' . $info['filename'] . '-optimized.' . $info['extension'];
+    }
+
+    /**
+     * تغییر اندازه تصویر اگر بزرگتر از حد مجاز باشد
+     */
+    private function resize_image(&$image, array $settings): void {
+        $width = imagesx($image);
+        $height = imagesy($image);
+
+        if ($width <= $settings['max_width'] && $height <= $settings['max_height']) {
             return;
         }
 
-        // استایل‌های ادمین
-        wp_enqueue_style(
-            'asg-admin-styles',
-            ASG_PLUGIN_URL . 'assets/css/asg-admin.css',
-            array(),
-            $this->assets_version
+        $ratio = min($settings['max_width'] / $width, $settings['max_height'] / $height);
+        $new_width = round($width * $ratio);
+        $new_height = round($height * $ratio);
+
+        $new_image = imagecreatetruecolor($new_width, $new_height);
+        
+        if (imageistruecolor($image)) {
+            imagealphablending($new_image, false);
+            imagesavealpha($new_image, true);
+        }
+
+        imagecopyresampled(
+            $new_image, $image,
+            0, 0, 0, 0,
+            $new_width, $new_height,
+            $width, $height
         );
 
-        // فایل‌های مربوط به گزارشات
-        if (strpos($hook, 'warranty-management-reports') !== false) {
-            wp_enqueue_style(
-                'asg-reports-styles',
-                ASG_PLUGIN_URL . 'assets/css/asg-reports.css',
-                array(),
-                $this->assets_version
-            );
-            
-            wp_enqueue_script(
-                'asg-reports-scripts',
-                ASG_PLUGIN_URL . 'assets/js/asg-reports.js',
-                array('jquery'),
-                $this->assets_version,
-                true
-            );
-        }
+        imagedestroy($image);
+        $image = $new_image;
     }
 
     /**
-     * اضافه کردن تنظیمات به هدر
+     * پاکسازی header
      */
-    public function add_head_settings() {
-        // Preload فایل‌های مهم
-        echo '<link rel="preload" href="' . ASG_PLUGIN_URL . 'assets/css/optimized.min.css" as="style">';
-        echo '<link rel="preload" href="' . ASG_PLUGIN_URL . 'assets/js/dist/optimized.min.js" as="script">';
-        
-        // اضافه کردن DNS Prefetch
-        echo '<link rel="dns-prefetch" href="//ajax.googleapis.com">';
-        
-        // تنظیمات بهینه‌سازی
-        echo '<meta http-equiv="x-dns-prefetch-control" content="on">';
+    public function cleanup_header(): void {
+        // این موارد با افزونه‌های کش تداخل ندارند
+        remove_action('wp_head', 'wp_generator');
+        remove_action('wp_head', 'wlwmanifest_link');
+        remove_action('wp_head', 'rsd_link');
+        remove_action('wp_head', 'wp_shortlink_wp_head');
     }
-
-    /**
-     * اضافه کردن async/defer به اسکریپت‌ها
-     */
-    public function add_async_defer_attributes($tag, $handle) {
-        // اضافه کردن async به فایل‌های غیر ضروری
-        if ('persian-datepicker' === $handle || 'asg-reports-scripts' === $handle) {
-            return str_replace(' src', ' async src', $tag);
-        }
-        
-        // اضافه کردن defer به فایل اصلی
-        if ('asg-optimized-scripts' === $handle) {
-            return str_replace(' src', ' defer src', $tag);
-        }
-        
-        return $tag;
-    }
-
-    /**
-     * بررسی صفحه گارانتی
-     */
-    private function is_warranty_page() {
-        global $post;
-        
-        if (is_singular()) {
-            return has_shortcode($post->post_content, 'warranty_form') ||
-                   has_shortcode($post->post_content, 'warranty_requests');
-        }
-        
-        return false;
-    }
-    /**
- * بررسی صفحه پیگیری گارانتی
- */
-private function is_guarantee_tracking_page() {
-    global $wp;
-    return home_url($wp->request) === home_url('my-account/guarantee-tracking');
-}
 }
