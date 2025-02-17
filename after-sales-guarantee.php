@@ -33,24 +33,14 @@ spl_autoload_register(function($class) {
     $relative_class = substr($class, $len);
     
     // تبدیل نام کلاس به مسیر فایل
-    $class_path = plugin_dir_path(__FILE__) . 'includes/class-asg-' . 
-                 strtolower(str_replace('_', '-', $relative_class)) . '.php';
+    $file_name = 'class-asg-' . strtolower(str_replace('_', '-', $relative_class)) . '.php';
+    $file_path = ASG_PLUGIN_DIR . 'includes/' . $file_name;
     
     // اگر فایل وجود دارد، آن را لود کن
-    if (file_exists($class_path)) {
-        require_once $class_path;
+    if (file_exists($file_path)) {
+        require_once $file_path;
     }
 });
-// فراخوانی فایل‌های اصلی
-require_once ASG_PLUGIN_DIR . 'includes/class-asg-security.php';
-require_once ASG_PLUGIN_DIR . 'includes/class-asg-notifications.php';
-require_once ASG_PLUGIN_DIR . 'includes/class-asg-api.php';
-require_once ASG_PLUGIN_DIR . 'includes/class-asg-reports.php';
-require_once ASG_PLUGIN_DIR . 'includes/class-asg-db.php';
-require_once ASG_PLUGIN_DIR . 'includes/class-asg-performance.php';
-require_once ASG_PLUGIN_DIR . 'includes/class-asg-assets-optimizer.php';
-
-// راه‌اندازی افزونه
 // راه‌اندازی افزونه
 function asg_init() {
     try {
