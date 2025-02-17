@@ -8,7 +8,7 @@ Author: Your Name
 
 // جلوگیری از دسترسی مستقیم
 if (!defined('ABSPATH')) {
-    exit;
+    exit('دسترسی مستقیم غیرمجاز است!');
 }
 
 // تعریف ثابت‌های افزونه
@@ -16,38 +16,20 @@ define('ASG_VERSION', '1.8');
 define('ASG_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('ASG_PLUGIN_URL', plugin_dir_url(__FILE__));
 
+// فراخوانی فایل‌های اصلی 
+foreach (glob(ASG_PLUGIN_DIR . 'includes/class-asg-*.php') as $file) {
+    require_once $file;
+}
+
 /**
- * Autoloader برای لود خودکار کلاس‌ها
+ * راه‌اندازی افزونه
  */
-spl_autoload_register(function($class) {
-    // پیشوند namespace افزونه
-    $prefix = 'ASG\\';
-    
-    // اگر کلاس با namespace ما شروع نمی‌شود، آن را نادیده بگیر
-    $len = strlen($prefix);
-    if (strncmp($prefix, $class, $len) !== 0) {
-        return;
-    }
-    
-    // حذف namespace برای پیدا کردن مسیر فایل
-    $relative_class = substr($class, $len);
-    
-    // تبدیل نام کلاس به مسیر فایل
-    $file_name = 'class-asg-' . strtolower(str_replace('_', '-', $relative_class)) . '.php';
-    $file_path = ASG_PLUGIN_DIR . 'includes/' . $file_name;
-    
-    // اگر فایل وجود دارد، آن را لود کن
-    if (file_exists($file_path)) {
-        require_once $file_path;
-    }
-});
-// راه‌اندازی افزونه
 function asg_init() {
     try {
         // لود ترجمه
         load_plugin_textdomain('after-sales-guarantee', false, dirname(plugin_basename(__FILE__)) . '/languages');
 
-        // ایجاد نمونه از کلاس‌های اصلی با namespace جدید
+        // ایجاد نمونه از کلاس‌های اصلی
         $security = new ASG\Security();
         $notifications = new ASG\Notifications();
         $api = new ASG\API();
@@ -55,10 +37,10 @@ function asg_init() {
         $assets = new ASG\Assets_Optimizer();
         
         do_action('asg_loaded');
+
     } catch (Exception $e) {
         error_log('ASG Plugin Error: ' . $e->getMessage());
         
-        // نمایش پیام خطا به ادمین
         if (is_admin()) {
             add_action('admin_notices', function() use ($e) {
                 ?>
@@ -70,8 +52,9 @@ function asg_init() {
         }
     }
 }
-add_action('plugins_loaded', 'asg_init');
 
+// راه‌اندازی افزونه بعد از لود شدن همه پلاگین‌ها
+add_action('plugins_loaded', 'asg_init');
 
 // فعال‌سازی افزونه و ایجاد جدول‌های دیتابیس
 register_activation_hook(__FILE__, 'asg_create_tables');
@@ -127,7 +110,7 @@ function asg_create_tables() {
 
 // افزودن منو به پیشخوان وردپرس
 add_action('admin_menu', 'asg_admin_menu');
-// افزودن منو به پیشخوان وردپرس
+
 function asg_admin_menu() {
     // افزودن منوی اصلی
     add_menu_page(
@@ -141,13 +124,14 @@ function asg_admin_menu() {
     );
 
     // افزودن زیرمنو برای دیباگ
-add_submenu_page(
-    'warranty-management',
-    'دیباگ',
-    'manage_options',
-    'warranty-management-debug', // تغییر اسلاگ
-    'asg_debug_page'
-);
+    add_submenu_page(
+        'warranty-management',
+        'دیباگ',
+        'دیباگ',
+        'manage_options',
+        'warranty-management-debug',
+        'asg_debug_page'
+    );
 
     // افزودن زیرمنو برای ثبت گارانتی جدید
     add_submenu_page(
@@ -175,7 +159,7 @@ add_submenu_page(
         'گزارشات',
         'گزارشات',
         'manage_options',
-        'warranty-management-reports', // تغییر اسلاگ
+        'warranty-management-reports',
         'asg_reports_main_page'
     );
 
@@ -185,7 +169,7 @@ add_submenu_page(
         'نمودارها',
         'نمودارها',
         'manage_options',
-        'warranty-management-charts', // تغییر اسلاگ
+        'warranty-management-charts',
         'asg_charts_page'
     );
 
@@ -199,16 +183,6 @@ add_submenu_page(
         'asg_status_settings_page'
     );
 
-    // افزودن زیرمنو برای دیباگ
-    add_submenu_page(
-        'warranty-management',
-        'دیباگ',
-        'دیباگ',
-        'manage_options',
-        'warranty-management-debug', // تغییر اسلاگ
-        'asg_debug_page'
-    );
-
     // افزودن صفحه مخفی برای ویرایش
     add_submenu_page(
         null,
@@ -220,6 +194,17 @@ add_submenu_page(
     );
 }
 
+// صفحه مدیریت درخواست‌ها
+function asg_admin_page() {
+    global $wpdb;
+
+    echo '<div class="wrap">';
+    echo '<h1>مدیریت گارانتی</h1>';
+    echo '<a href="' . admin_url('admin.php?page=warranty-management-add') . '" class="button button-primary">ثبت گارانتی جدید</a>';
+    echo '<h2>لیست درخواست‌های گارانتی</h2>';
+    asg_show_requests_table();
+    echo '</div>';
+}
 // صفحه دیباگ (اضافه شده)
 // تابع دیباگ
 function asg_debug_page() {
