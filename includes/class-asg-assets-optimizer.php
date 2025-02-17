@@ -1,13 +1,18 @@
 <?php
 namespace ASG;
 
+use Exception;
+
 if (!defined('ABSPATH')) {
-    exit;
+    exit('دسترسی مستقیم غیرمجاز است!');
 }
 
+/**
+ * کلاس بهینه‌سازی assets و تصاویر
+ */
 class Assets_Optimizer {
     /**
-     * @var array لیست افزونه‌های کش شناخته شده
+     * @var string[] لیست افزونه‌های کش شناخته شده
      */
     private const KNOWN_CACHE_PLUGINS = [
         'wp-super-cache/wp-cache.php',
@@ -18,7 +23,7 @@ class Assets_Optimizer {
     ];
 
     /**
-     * @var array تنظیمات بهینه‌سازی تصاویر
+     * @var array<string,array<string,int>> تنظیمات بهینه‌سازی تصاویر
      */
     private const IMAGE_SETTINGS = [
         'jpeg' => [
@@ -33,7 +38,10 @@ class Assets_Optimizer {
         ]
     ];
 
-    private $active_cache_plugin;
+    /**
+     * @var string|null افزونه کش فعال
+     */
+    private ?string $active_cache_plugin = null;
 
     public function __construct() {
         $this->detect_cache_plugin();
@@ -52,38 +60,42 @@ class Assets_Optimizer {
         }
     }
 
+    /**
+     * راه‌اندازی هوک‌ها
+     */
     private function init_hooks(): void {
-        // اجرای هوک‌ها فقط اگر افزونه کش خاصی فعال نباشد
         if (!$this->active_cache_plugin) {
             add_action('wp_enqueue_scripts', [$this, 'optimize_assets'], 999);
             add_filter('script_loader_tag', [$this, 'add_async_defer'], 10, 3);
         }
 
-        // بهینه‌سازی تصاویر قبل از ذخیره
         add_filter('wp_handle_upload', [$this, 'optimize_upload'], 10, 2);
-        
-        // پاکسازی header همیشه اجرا شود
         add_action('init', [$this, 'cleanup_header']);
     }
 
     /**
      * بهینه‌سازی تصویر آپلود شده
+     * 
+     * @param array<string,mixed> $upload اطلاعات فایل آپلود شده
+     * @return array<string,mixed>
      */
     public function optimize_upload(array $upload): array {
-        // اگر افزونه‌های بهینه‌ساز تصویر فعال هستند، رد شود
         if ($this->has_image_optimization_plugin()) {
             return $upload;
         }
 
-        if (strpos($upload['type'], 'image/') !== 0) {
+        if (!isset($upload['type']) || strpos($upload['type'], 'image/') !== 0) {
             return $upload;
         }
 
         $file_path = $upload['file'];
-        $image_type = wp_check_filetype($file_path)['type'];
+        $file_type = wp_check_filetype($file_path);
+        $image_type = $file_type['type'] ?? '';
 
-        // بهینه‌سازی با حفظ فایل اصلی
-        $this->optimize_image($file_path, $image_type);
+        if ($image_type && $this->optimize_image($file_path, $image_type)) {
+            // لاگ موفقیت بهینه‌سازی
+            error_log(sprintf('ASG: تصویر %s با موفقیت بهینه شد.', basename($file_path)));
+        }
 
         return $upload;
     }
@@ -92,27 +104,34 @@ class Assets_Optimizer {
      * بررسی وجود افزونه بهینه‌ساز تصویر
      */
     private function has_image_optimization_plugin(): bool {
-        $optimization_plugins = [
-            'imagify/imagify.php',
-            'wp-smushit/wp-smush.php',
-            'ewww-image-optimizer/ewww-image-optimizer.php',
-            'shortpixel-image-optimiser/wp-shortpixel.php'
-        ];
+        static $has_optimizer = null;
 
-        foreach ($optimization_plugins as $plugin) {
-            if (is_plugin_active($plugin)) {
-                return true;
+        if ($has_optimizer === null) {
+            $optimization_plugins = [
+                'imagify/imagify.php',
+                'wp-smushit/wp-smush.php',
+                'ewww-image-optimizer/ewww-image-optimizer.php',
+                'shortpixel-image-optimiser/wp-shortpixel.php'
+            ];
+
+            foreach ($optimization_plugins as $plugin) {
+                if (is_plugin_active($plugin)) {
+                    $has_optimizer = true;
+                    break;
+                }
             }
+
+            $has_optimizer = $has_optimizer ?? false;
         }
 
-        return false;
+        return $has_optimizer;
     }
 
     /**
-     * بهینه‌سازی تصویر با حفظ نسخه اصلی
+     * بهینه‌سازی تصویر
      */
     private function optimize_image(string $file_path, string $mime_type): bool {
-        if (!function_exists('imagecreatefromjpeg')) {
+        if (!function_exists('imagecreatefromjpeg') || !is_readable($file_path)) {
             return false;
         }
 
@@ -123,49 +142,90 @@ class Assets_Optimizer {
             return false;
         }
 
-        // ایجاد نسخه بهینه در کنار فایل اصلی
         $optimized_path = $this->get_optimized_path($file_path);
 
         try {
-            copy($file_path, $optimized_path);
-
-            switch ($mime_type) {
-                case 'image/jpeg':
-                    $image = imagecreatefromjpeg($optimized_path);
-                    $this->resize_image($image, $settings);
-                    imagejpeg($image, $optimized_path, $settings['quality']);
-                    break;
-
-                case 'image/png':
-                    $image = imagecreatefrompng($optimized_path);
-                    imagealphablending($image, false);
-                    imagesavealpha($image, true);
-                    $this->resize_image($image, $settings);
-                    imagepng($image, $optimized_path, $settings['compression']);
-                    break;
+            if (!copy($file_path, $optimized_path)) {
+                throw new Exception('Failed to create optimized copy');
             }
 
-            if (isset($image)) {
-                imagedestroy($image);
+            $image = match ($mime_type) {
+                'image/jpeg' => $this->optimize_jpeg($optimized_path, $settings),
+                'image/png' => $this->optimize_png($optimized_path, $settings),
+                default => false
+            };
+
+            if ($image === false) {
+                unlink($optimized_path);
+                return false;
             }
 
             return true;
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             error_log('ASG Image Optimization Error: ' . $e->getMessage());
+            if (file_exists($optimized_path)) {
+                unlink($optimized_path);
+            }
             return false;
         }
     }
 
     /**
-     * مسیر فایل بهینه شده
+     * بهینه‌سازی تصویر JPEG
+     * 
+     * @throws Exception
      */
-    private function get_optimized_path(string $original_path): string {
-        $info = pathinfo($original_path);
-        return $info['dirname'] . '/' . $info['filename'] . '-optimized.' . $info['extension'];
+    private function optimize_jpeg(string $path, array $settings): bool {
+        $image = imagecreatefromjpeg($path);
+        if (!$image) {
+            throw new Exception('Failed to create image from JPEG');
+        }
+
+        $this->resize_image($image, $settings);
+        $result = imagejpeg($image, $path, $settings['quality']);
+        imagedestroy($image);
+
+        return $result;
     }
 
     /**
-     * تغییر اندازه تصویر اگر بزرگتر از حد مجاز باشد
+     * بهینه‌سازی تصویر PNG
+     * 
+     * @throws Exception
+     */
+    private function optimize_png(string $path, array $settings): bool {
+        $image = imagecreatefrompng($path);
+        if (!$image) {
+            throw new Exception('Failed to create image from PNG');
+        }
+
+        imagealphablending($image, false);
+        imagesavealpha($image, true);
+        $this->resize_image($image, $settings);
+        $result = imagepng($image, $path, $settings['compression']);
+        imagedestroy($image);
+
+        return $result;
+    }
+
+    /**
+     * ایجاد مسیر فایل بهینه شده
+     */
+    private function get_optimized_path(string $original_path): string {
+        $info = pathinfo($original_path);
+        return sprintf(
+            '%s/%s-optimized.%s',
+            $info['dirname'],
+            $info['filename'],
+            $info['extension']
+        );
+    }
+
+    /**
+     * تغییر اندازه تصویر
+     * 
+     * @param resource $image
+     * @param array<string,int> $settings
      */
     private function resize_image(&$image, array $settings): void {
         $width = imagesx($image);
@@ -175,23 +235,34 @@ class Assets_Optimizer {
             return;
         }
 
-        $ratio = min($settings['max_width'] / $width, $settings['max_height'] / $height);
-        $new_width = round($width * $ratio);
-        $new_height = round($height * $ratio);
+        $ratio = min(
+            $settings['max_width'] / $width,
+            $settings['max_height'] / $height
+        );
+
+        $new_width = (int)round($width * $ratio);
+        $new_height = (int)round($height * $ratio);
 
         $new_image = imagecreatetruecolor($new_width, $new_height);
         
+        if (!$new_image) {
+            throw new Exception('Failed to create new image');
+        }
+
         if (imageistruecolor($image)) {
             imagealphablending($new_image, false);
             imagesavealpha($new_image, true);
         }
 
-        imagecopyresampled(
+        if (!imagecopyresampled(
             $new_image, $image,
             0, 0, 0, 0,
             $new_width, $new_height,
             $width, $height
-        );
+        )) {
+            imagedestroy($new_image);
+            throw new Exception('Failed to resize image');
+        }
 
         imagedestroy($image);
         $image = $new_image;
@@ -201,10 +272,53 @@ class Assets_Optimizer {
      * پاکسازی header
      */
     public function cleanup_header(): void {
-        // این موارد با افزونه‌های کش تداخل ندارند
         remove_action('wp_head', 'wp_generator');
         remove_action('wp_head', 'wlwmanifest_link');
         remove_action('wp_head', 'rsd_link');
         remove_action('wp_head', 'wp_shortlink_wp_head');
+    }
+
+    /**
+     * اضافه کردن async/defer به اسکریپت‌ها
+     */
+    public function add_async_defer(string $tag, string $handle, string $src): string {
+        // اجرای اسکریپت‌ها به صورت async برای بهبود سرعت بارگذاری
+        if (strpos($handle, 'async') !== false) {
+            $tag = str_replace(' src', ' async src', $tag);
+        }
+
+        // اجرای اسکریپت‌ها به صورت defer برای اسکریپت‌های غیر ضروری
+        if (strpos($handle, 'defer') !== false) {
+            $tag = str_replace(' src', ' defer src', $tag);
+        }
+
+        return $tag;
+    }
+
+    /**
+     * بهینه‌سازی asset ها
+     */
+    public function optimize_assets(): void {
+        if (is_admin()) {
+            return;
+        }
+
+        // حذف emoji ها
+        remove_action('wp_head', 'print_emoji_detection_script', 7);
+        remove_action('wp_print_styles', 'print_emoji_styles');
+
+        // حذف نسخه از URL های استاتیک
+        add_filter('style_loader_src', [$this, 'remove_version_query'], 10, 2);
+        add_filter('script_loader_src', [$this, 'remove_version_query'], 10, 2);
+    }
+
+    /**
+     * حذف query string نسخه از URL های استاتیک
+     */
+    public function remove_version_query(string $src): string {
+        if (strpos($src, 'ver=')) {
+            $src = remove_query_arg('ver', $src);
+        }
+        return $src;
     }
 }

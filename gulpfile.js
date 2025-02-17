@@ -7,62 +7,59 @@ const webpack = require('webpack-stream');
 const terser = require('gulp-terser');
 const rename = require('gulp-rename');
 const sourcemaps = require('gulp-sourcemaps');
-const clean = require('gulp-clean');
-const browserSync = require('browser-sync').create();
+const concat = require('gulp-concat');
 
 // مسیرهای پروژه
 const paths = {
     styles: {
         src: 'assets/scss/**/*.scss',
+        admin: 'assets/scss/admin.scss',
+        public: 'assets/scss/public.scss',
         dest: 'assets/css'
     },
     scripts: {
         src: 'assets/js/modules/**/*.js',
-        entry: 'assets/js/modules/index.js',
-        dest: 'assets/js'
+        admin: 'assets/js/modules/admin.js',
+        public: 'assets/js/modules/public.js',
+        dest: 'assets/js/dist'
+    },
+    vendor: {
+        styles: 'assets/css/vendor/**/*.css',
+        scripts: 'assets/js/vendor/**/*.js'
     }
 };
 
-// پاکسازی فایل‌های قبلی
-gulp.task('clean', () => {
-    return gulp.src(['assets/css/*.min.css', 'assets/js/*.min.js'], { read: false })
-        .pipe(clean());
-});
-
-// کامپایل SCSS به CSS
-gulp.task('styles', () => {
-    return gulp.src(paths.styles.src)
+// تسک CSS عمومی
+gulp.task('public-css', () => {
+    return gulp.src(paths.styles.public)
         .pipe(sourcemaps.init())
-        .pipe(sass({
-            outputStyle: 'expanded',
-            includePaths: ['node_modules']
-        }).on('error', sass.logError))
-        .pipe(autoprefixer({
-            cascade: false,
-            grid: 'autoplace'
-        }))
-        .pipe(cssnano({
-            preset: ['default', {
-                discardComments: { removeAll: true }
-            }]
-        }))
+        .pipe(sass().on('error', sass.logError))
+        .pipe(autoprefixer())
+        .pipe(cssnano())
         .pipe(rename({ suffix: '.min' }))
         .pipe(sourcemaps.write('.'))
-        .pipe(gulp.dest(paths.styles.dest))
-        .pipe(browserSync.stream());
+        .pipe(gulp.dest(paths.styles.dest));
 });
 
-// کامپایل JavaScript با Webpack
-gulp.task('scripts', () => {
-    return gulp.src(paths.scripts.entry)
+// تسک CSS ادمین
+gulp.task('admin-css', () => {
+    return gulp.src(paths.styles.admin)
+        .pipe(sourcemaps.init())
+        .pipe(sass().on('error', sass.logError))
+        .pipe(autoprefixer())
+        .pipe(cssnano())
+        .pipe(rename({ suffix: '.min' }))
+        .pipe(sourcemaps.write('.'))
+        .pipe(gulp.dest(paths.styles.dest));
+});
+
+// تسک JavaScript عمومی
+gulp.task('public-js', () => {
+    return gulp.src(paths.scripts.public)
         .pipe(webpack({
-            mode: process.env.NODE_ENV === 'production' ? 'production' : 'development',
-            entry: {
-                'asg-script': paths.scripts.entry,
-                'asg-admin': './assets/js/modules/admin.js'
-            },
+            mode: process.env.NODE_ENV || 'development',
             output: {
-                filename: '[name].min.js'
+                filename: 'public.min.js'
             },
             module: {
                 rules: [{
@@ -71,73 +68,71 @@ gulp.task('scripts', () => {
                     use: {
                         loader: 'babel-loader',
                         options: {
-                            presets: ['@babel/preset-env'],
-                            plugins: ['@babel/plugin-transform-runtime']
+                            presets: ['@babel/preset-env']
                         }
                     }
                 }]
-            },
-            optimization: {
-                minimize: true,
-                splitChunks: {
-                    chunks: 'all'
-                }
             }
         }))
         .pipe(sourcemaps.init())
-        .pipe(terser({
-            compress: {
-                drop_console: process.env.NODE_ENV === 'production'
+        .pipe(terser())
+        .pipe(sourcemaps.write('.'))
+        .pipe(gulp.dest(paths.scripts.dest));
+});
+
+// تسک JavaScript ادمین
+gulp.task('admin-js', () => {
+    return gulp.src(paths.scripts.admin)
+        .pipe(webpack({
+            mode: process.env.NODE_ENV || 'development',
+            output: {
+                filename: 'admin.min.js'
+            },
+            module: {
+                rules: [{
+                    test: /\.js$/,
+                    exclude: /node_modules/,
+                    use: {
+                        loader: 'babel-loader',
+                        options: {
+                            presets: ['@babel/preset-env']
+                        }
+                    }
+                }]
             }
         }))
+        .pipe(sourcemaps.init())
+        .pipe(terser())
         .pipe(sourcemaps.write('.'))
-        .pipe(gulp.dest(paths.scripts.dest))
-        .pipe(browserSync.stream());
+        .pipe(gulp.dest(paths.scripts.dest));
 });
 
-// تماشای تغییرات فایل‌ها
-gulp.task('watch', () => {
-    browserSync.init({
-        proxy: "localhost/your-wordpress-site",
-        notify: false
-    });
-
-    gulp.watch(paths.styles.src, gulp.series('styles'));
-    gulp.watch(paths.scripts.src, gulp.series('scripts'));
-    gulp.watch('**/*.php').on('change', browserSync.reload);
-});
-
-// تسک اصلی برای توسعه
-gulp.task('dev', gulp.series('clean', gulp.parallel('styles', 'scripts'), 'watch'));
-
-// تسک برای محیط تولید
-gulp.task('build', gulp.series('clean', gulp.parallel('styles', 'scripts')));
-
-// تسک پیش‌فرض
-gulp.task('default', gulp.series('dev'));
-
-// بررسی اندازه فایل‌ها
-gulp.task('size', () => {
-    const fileSize = require('gulp-size');
+// تسک کپی فایل‌های vendor
+gulp.task('vendor', () => {
+    // کپی CSS های vendor
+    gulp.src(paths.vendor.styles)
+        .pipe(gulp.dest(paths.styles.dest + '/vendor'));
     
-    console.log('CSS Files:');
-    gulp.src('assets/css/*.min.css')
-        .pipe(fileSize({
-            showFiles: true,
-            title: 'Minified CSS'
-        }));
-        
-    console.log('JS Files:');
-    gulp.src('assets/js/*.min.js')
-        .pipe(fileSize({
-            showFiles: true,
-            title: 'Minified JS'
-        }));
+    // کپی JS های vendor
+    return gulp.src(paths.vendor.scripts)
+        .pipe(gulp.dest(paths.scripts.dest + '/vendor'));
 });
 
-// تسک تست
-gulp.task('test', (done) => {
-    console.log('Running tests...');
-    // اینجا می‌توانید تست‌های خود را اضافه کنید
-    done();
+// تسک Watch
+gulp.task('watch', () => {
+    gulp.watch(paths.styles.src, gulp.parallel('public-css', 'admin-css'));
+    gulp.watch(paths.scripts.src, gulp.parallel('public-js', 'admin-js'));
 });
+
+// تسک پیش‌فرض برای توسعه
+gulp.task('default', gulp.series(
+    'vendor',
+    gulp.parallel('public-css', 'admin-css', 'public-js', 'admin-js'),
+    'watch'
+));
+
+// تسک build برای تولید
+gulp.task('build', gulp.series(
+    'vendor',
+    gulp.parallel('public-css', 'admin-css', 'public-js', 'admin-js')
+));
