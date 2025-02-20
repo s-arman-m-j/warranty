@@ -10,7 +10,7 @@ class ASG_Settings {
     }
 
     public function add_settings_page() {
-        add_menu_page(
+        add_options_page(
             'ASG Settings',
             'ASG Settings',
             'manage_options',
