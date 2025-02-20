@@ -16,9 +16,7 @@ define('ASG_VERSION', '1.8');
 define('ASG_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('ASG_PLUGIN_URL', plugin_dir_url(__FILE__));
 
-/**
- * Autoloader برای لود خودکار کلاس‌ها
- */
+// Autoloader برای لود خودکار کلاس‌ها
 spl_autoload_register(function($class) {
     // پیشوند کلاس‌های افزونه
     $prefix = 'ASG_';
@@ -39,6 +37,7 @@ spl_autoload_register(function($class) {
         require_once $class_path;
     }
 });
+
 // فراخوانی فایل‌های اصلی
 require_once ASG_PLUGIN_DIR . 'includes/class-asg-security.php';
 require_once ASG_PLUGIN_DIR . 'includes/class-asg-notifications.php';
@@ -47,6 +46,7 @@ require_once ASG_PLUGIN_DIR . 'includes/class-asg-reports.php';
 require_once ASG_PLUGIN_DIR . 'includes/class-asg-db.php';
 require_once ASG_PLUGIN_DIR . 'includes/class-asg-performance.php';
 require_once ASG_PLUGIN_DIR . 'includes/class-asg-assets-optimizer.php';
+require_once ASG_PLUGIN_DIR . 'includes/class-asg-settings.php';  // Include the new settings file
 
 // راه‌اندازی افزونه
 function asg_init() {
@@ -54,11 +54,10 @@ function asg_init() {
     ASG_Notifications::instance();
     ASG_API::instance();
     ASG_Reports::instance();
-    // اضافه کردن خط زیر به انتهای تابع
     ASG_Assets_Optimizer::instance();
+    new ASG_Settings();  // اضافه کردن کلاس تنظیمات جدید
 }
 add_action('plugins_loaded', 'asg_init');
-
 
 // فعال‌سازی افزونه و ایجاد جدول‌های دیتابیس
 register_activation_hook(__FILE__, 'asg_create_tables');
@@ -114,7 +113,6 @@ function asg_create_tables() {
 
 // افزودن منو به پیشخوان وردپرس
 add_action('admin_menu', 'asg_admin_menu');
-// افزودن منو به پیشخوان وردپرس
 function asg_admin_menu() {
     // افزودن منوی اصلی
     add_menu_page(
@@ -127,86 +125,17 @@ function asg_admin_menu() {
         6
     );
 
-    // افزودن زیرمنو برای دیباگ
-add_submenu_page(
-    'warranty-management',
-    'دیباگ',
-    'manage_options',
-    'warranty-management-debug', // تغییر اسلاگ
-    'asg_debug_page'
-);
-
-    // افزودن زیرمنو برای ثبت گارانتی جدید
-    add_submenu_page(
-        'warranty-management',
-        'ثبت گارانتی جدید',
-        'ثبت گارانتی جدید',
-        'manage_options',
-        'warranty-management-add',
-        'asg_add_guarantee_page'
-    );
-
-    // افزودن زیرمنو برای ثبت گارانتی دسته‌ای
-    add_submenu_page(
-        'warranty-management',
-        'ثبت گارانتی دسته‌ای',
-        'ثبت گارانتی دسته‌ای',
-        'manage_options',
-        'warranty-management-bulk',
-        'asg_bulk_guarantee_page'
-    );
-
-    // افزودن زیرمنو برای گزارشات
-    add_submenu_page(
-        'warranty-management',
-        'گزارشات',
-        'گزارشات',
-        'manage_options',
-        'warranty-management-reports', // تغییر اسلاگ
-        'asg_reports_main_page'
-    );
-
-    // افزودن زیرمنو برای نمودارها
-    add_submenu_page(
-        'warranty-management',
-        'نمودارها',
-        'نمودارها',
-        'manage_options',
-        'warranty-management-charts', // تغییر اسلاگ
-        'asg_charts_page'
-    );
-
-    // افزودن زیرمنو برای تنظیمات
-    add_submenu_page(
-        'warranty-management',
-        'تنظیمات',
-        'تنظیمات',
-        'manage_options',
-        'warranty-management-settings',
-        'asg_status_settings_page'
-    );
-
-    // افزودن زیرمنو برای دیباگ
-    add_submenu_page(
-        'warranty-management',
-        'دیباگ',
-        'دیباگ',
-        'manage_options',
-        'warranty-management-debug', // تغییر اسلاگ
-        'asg_debug_page'
-    );
-
-    // افزودن صفحه مخفی برای ویرایش
-    add_submenu_page(
-        null,
-        'ویرایش گارانتی',
-        'ویرایش گارانتی',
-        'manage_options',
-        'warranty-management-edit',
-        'asg_edit_guarantee_page'
-    );
+    // افزودن زیرمنوها
+    add_submenu_page('warranty-management', 'دیباگ', 'دیباگ', 'manage_options', 'warranty-management-debug', 'asg_debug_page');
+    add_submenu_page('warranty-management', 'ثبت گارانتی جدید', 'ثبت گارانتی جدید', 'manage_options', 'warranty-management-add', 'asg_add_guarantee_page');
+    add_submenu_page('warranty-management', 'ثبت گارانتی دسته‌ای', 'ثبت گارانتی دسته‌ای', 'manage_options', 'warranty-management-bulk', 'asg_bulk_guarantee_page');
+    add_submenu_page('warranty-management', 'گزارشات', 'گزارشات', 'manage_options', 'warranty-management-reports', 'asg_reports_main_page');
+    add_submenu_page('warranty-management', 'نمودارها', 'نمودارها', 'manage_options', 'warranty-management-charts', 'asg_charts_page');
+    add_submenu_page('warranty-management', 'تنظیمات', 'تنظیمات', 'manage_options', 'warranty-management-settings', 'asg_status_settings_page');
+    add_submenu_page(null, 'ویرایش گارانتی', 'ویرایش گارانتی', 'manage_options', 'warranty-management-edit', 'asg_edit_guarantee_page');
 }
 
+// سایر توابع و هوک‌ها...
 // صفحه دیباگ (اضافه شده)
 // تابع دیباگ
 function asg_debug_page() {
